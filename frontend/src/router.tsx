@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom"
 import { AppLayout } from "@/layouts/app-layout"
+import { AlertsPage } from "@/pages/alerts"
 import { ChannelsPage } from "@/pages/channels"
 import { DashboardPage } from "@/pages/dashboard"
 import { RulesPage } from "@/pages/rules"
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
             { path: "/trend", element: <TrendPage /> },
             { path: "/rules", element: <RulesPage /> },
             { path: "/channels", element: <ChannelsPage /> },
+            { path: "/alerts", element: <AlertsPage /> },
             { path: "/settings", element: <SettingsPage /> },
         ],
     },

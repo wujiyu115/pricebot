@@ -1,4 +1,4 @@
-import { Bell, ChartLine, Cog, ListChecks, Radio, Target, TrendingUp } from "lucide-react"
+import { Bell, ChartLine, Cog, History, ListChecks, Radio, Target, TrendingUp } from "lucide-react"
 import { NavLink, Outlet } from "react-router-dom"
 import { cn } from "@/lib/utils"
 
@@ -8,6 +8,7 @@ const NAV = [
     { to: "/trend", label: "价格趋势", icon: TrendingUp },
     { to: "/rules", label: "告警规则", icon: ListChecks },
     { to: "/channels", label: "推送渠道", icon: Bell },
+    { to: "/alerts", label: "告警历史", icon: History },
     { to: "/settings", label: "设置", icon: Cog },
 ]
 
