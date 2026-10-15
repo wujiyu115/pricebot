@@ -42,6 +42,10 @@
       "url": "",
       "method": "POST",
       "headers": {}
+    },
+    "wecom": {
+      "enabled": false,
+      "webhook_url": ""
     }
   }
 }

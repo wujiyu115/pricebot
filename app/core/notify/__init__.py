@@ -9,6 +9,7 @@ from .feishu import FeishuNotifier
 from .ntfy import NtfyNotifier
 from .telegram import TelegramNotifier
 from .webhook import WebhookNotifier
+from .wecom import WeComNotifier
 
 
 def load_builtin_notifiers() -> None:
@@ -18,6 +19,7 @@ def load_builtin_notifiers() -> None:
     assert FeishuNotifier.name
     assert DingTalkNotifier.name
     assert WebhookNotifier.name
+    assert WeComNotifier.name
 
 
 __all__ = [

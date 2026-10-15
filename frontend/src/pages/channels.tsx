@@ -38,6 +38,9 @@ const FIELD_DEFS: Record<string, Array<{ key: string; label: string; placeholder
         { key: "webhook_url", label: "Webhook URL", placeholder: "https://oapi.dingtalk.com/..." },
         { key: "secret", label: "加签密钥", placeholder: "SEC..." },
     ],
+    wecom: [
+        { key: "webhook_url", label: "Webhook URL", placeholder: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...", hint: "群聊 → 添加机器人即得" },
+    ],
     webhook: [
         { key: "url", label: "URL", placeholder: "https://example.com/hook" },
         { key: "method", label: "Method", placeholder: "POST" },
