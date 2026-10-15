@@ -6,12 +6,14 @@ from .bark import BarkNotifier
 from .base import Message, Notifier, SendResult, get_notifier, list_notifiers, register
 from .dingtalk import DingTalkNotifier
 from .feishu import FeishuNotifier
+from .ntfy import NtfyNotifier
 from .telegram import TelegramNotifier
 from .webhook import WebhookNotifier
 
 
 def load_builtin_notifiers() -> None:
     assert BarkNotifier.name
+    assert NtfyNotifier.name
     assert TelegramNotifier.name
     assert FeishuNotifier.name
     assert DingTalkNotifier.name

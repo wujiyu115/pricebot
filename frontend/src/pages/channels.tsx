@@ -20,6 +20,12 @@ const FIELD_DEFS: Record<string, Array<{ key: string; label: string; placeholder
         { key: "sound", label: "铃声", placeholder: "minuet", hint: "留空 = 默认" },
         { key: "level", label: "推送级别", placeholder: "timeSensitive", hint: "active/timeSensitive/critical 等" },
     ],
+    ntfy: [
+        { key: "server", label: "服务器", placeholder: "https://ntfy.sh", hint: "可在 NAS 自托管 ntfy" },
+        { key: "topic", label: "Topic", placeholder: "my-pricebot-x7k2", hint: "APP 订阅同名 topic；topic 即密码，建议带随机后缀" },
+        { key: "priority", label: "优先级", placeholder: "high", hint: "min/low/default/high/urgent（对应 1-5）" },
+        { key: "tags", label: "图标 tags", placeholder: "chart_with_upwards_trend", hint: "官方 emoji shortcode，逗号分隔" },
+    ],
     telegram: [
         { key: "bot_token", label: "Bot Token", placeholder: "123456:ABC-xxx" },
         { key: "chat_id", label: "Chat ID", placeholder: "-1001234567890" },
@@ -129,8 +135,11 @@ function ChannelCard({ channel }: { channel: ChannelMeta }) {
 
 export function ChannelsPage() {
     const { data: channels } = useQuery({ queryKey: ["channels"], queryFn: api.listChannels })
-    const sorted = [...(channels ?? [])].sort((a, b) =>
-        a.name === "bark" ? -1 : b.name === "bark" ? 1 : a.name.localeCompare(b.name),
+    const order = ["bark", "ntfy"]
+    const sorted = [...(channels ?? [])].sort(
+        (a, b) =>
+            (order.indexOf(a.name) + 1 || 99) - (order.indexOf(b.name) + 1 || 99) ||
+            a.name.localeCompare(b.name),
     )
 
     return (

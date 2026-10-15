@@ -15,6 +15,13 @@
       "icon": "",
       "level": ""
     },
+    "ntfy": {
+      "enabled": false,
+      "server": "https://ntfy.sh",
+      "topic": "",
+      "priority": "high",
+      "tags": ""
+    },
     "telegram": {
       "enabled": false,
       "bot_token": "",

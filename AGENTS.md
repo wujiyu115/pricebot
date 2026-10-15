@@ -30,6 +30,7 @@ PriceBot：国内金价（上金所 AU9999 / 黄金T+D）监控推送系统。�
 - **cooldown=0 是合法值**（无冷却），反序列化禁用 `or` 短路取默认（已修过 `Rule.from_dict` 的坑）
 - **触发后 streak 归零**：防抖语义是触发后需**重新**连续确认 confirm_count 次才会再次触发（冷却是另一道闸）
 - **sqlite 是阻塞 IO**：API 读历史走 `asyncio.to_thread`；写只在后台 loop 线程
+- **ntfy JSON 发布的 priority 必须是整数**（1-5）：字符串别名（"high" 等）只支持 HTTP 头/CLI，JSON 体传字符串会得到**误导性的 400 "request body must be valid JSON"**（2026-10 实测踩坑，`NtfyNotifier` 已做别名→整数映射）。ntfy.sh 本机/NAS 双端直连可达（无需代理）；JSON 体里 tags 用官方 shortcode（`chart_with_upwards_trend` 不是 `chart_increasing`）；中文标题/正文正常；topic 即密码，建议带随机后缀；NAS 可自托管（`server` 配置项）
 - **Bark 无 device_keys 时 send 返回 ok=False**（不算异常）；测试推送需先启用渠道（`PUT /api/channels/{name}` enabled=true）
 - **vendored UI 组件**（`frontend/src/components/ui/*`，拷贝自 StreamCap 的 shadcn 组件）：`.pi-lens.json` 已 ignore；以 `tsc -b && vite build` 为准。已知 pi-lens turn-end 探针会按 `/home/ejoy/package.json`（家目录全局清单）解析前端 import，与 frontend/node_modules 无关——若报 Cannot find module 'sonner' 等，先查 `/home/ejoy/node_modules` 是否缺包（家目录是 bun 管理：改完 `cd /home/ejoy && bun install` 复核；**别用 npm 在家目录装包**，会按陈旧 package-lock 修剪，曾误删 sharp/onnxruntime-node）
 
