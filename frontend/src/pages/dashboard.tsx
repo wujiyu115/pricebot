@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Sparkline } from "@/components/sparkline"
 import { cn } from "@/lib/utils"
 import type { Quote } from "@/types"
 
@@ -17,10 +18,12 @@ function QuoteCard({
     name,
     symbol,
     quote,
+    targetId,
 }: {
     name: string
     symbol: string
     quote: Quote | null
+    targetId: string
 }) {
     const last = quote?.last ?? null
     const pct =
@@ -30,9 +33,12 @@ function QuoteCard({
             <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-base">
                     <span>{name}</span>
-                    <Badge variant="outline" className="font-mono text-xs text-muted-foreground">
-                        {symbol}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                        <Sparkline targetId={targetId} />
+                        <Badge variant="outline" className="font-mono text-xs text-muted-foreground">
+                            {symbol}
+                        </Badge>
+                    </div>
                 </CardTitle>
             </CardHeader>
             <CardContent>
@@ -153,7 +159,13 @@ export function DashboardPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
                 {dash.quotes.map((q) => (
-                    <QuoteCard key={q.target_id} name={q.name} symbol={q.symbol} quote={q.quote} />
+                    <QuoteCard
+                        key={q.target_id}
+                        targetId={q.target_id}
+                        name={q.name}
+                        symbol={q.symbol}
+                        quote={q.quote}
+                    />
                 ))}
             </div>
 
