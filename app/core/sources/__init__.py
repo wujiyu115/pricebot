@@ -11,6 +11,7 @@ from .base import (
     list_sources,
     register,
 )
+from .binance import BinanceSource
 from .generic_http import GenericHTTPSource
 from .sge_daily import SGEDailySource
 from .sina import SinaSource
@@ -23,6 +24,7 @@ def load_builtin_sources() -> None:
     assert SinaSource.name
     assert SGEDailySource.name
     assert GenericHTTPSource.name
+    assert BinanceSource.name
     assert SinaStockSource.name
     assert SinaFuturesSource.name
 

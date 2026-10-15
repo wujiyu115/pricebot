@@ -39,7 +39,9 @@ docker run -d --name pricebot -p 6106:6106 \
 | 上金所黄金T+D | sina | `SGE_AUTD` |
 | A股股票/指数 | sina_stock | `sh600519` / `sz000001` / `sh000001`(上证指数) |
 | 商品期货主力连续 | sina_futures | `SC0`(原油) / `RB0`(螺纹) / `CU0`(铜) / `I0`(铁矿) / `AU0`(沪金) |
+| 加密货币（技术演示） | binance | `BTCUSDT` / `ETHUSDT` / `SOLUSDT` |
 
+加密货币走 Binance 官方只读公共镜像（data-api.binance.vision），7x24 交易、涨跌幅按 24h 开盘基准。
 A股代码规则：`sh`/`sz`/`bj` + 6 位数字；指数 `sh000xxx`/`sz399xxx`（单位:点）。涨跌幅按昨收自动计算。
 期货代码规则：品种 + 0（主力连续），如 `SC0`/`RB0`/`CU0`/`HC0`/`J0`/`M0`/`TA0`/`AU0`/`AG0`；涨跌幅按昨结算计算；单位按品种映射（原油=元/桶、金=元/克、银=元/千克、其余=元/吨，可用标的 extra.unit 覆盖）。
 

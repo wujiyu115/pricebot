@@ -69,9 +69,7 @@ class SinaFuturesSource(SourceAdapter):
     async def fetch(self, symbol: str, extra: dict[str, Any] | None = None) -> Quote:
         symbol = symbol.strip().upper()
         if not _SYMBOL_RE.match(symbol):
-            raise SourceError(
-                f"invalid futures symbol: {symbol!r} (expect variety + 0, e.g. SC0/RB0/CU0)"
-            )
+            raise SourceError(f"invalid futures symbol: {symbol!r} (expect variety + 0, e.g. SC0/RB0/CU0)")
 
         url = f"https://hq.sinajs.cn/list=nf_{symbol}"
         async with httpx.AsyncClient(timeout=self.timeout, headers=_HEADERS) as client:
