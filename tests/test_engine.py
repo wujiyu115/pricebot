@@ -59,6 +59,41 @@ class TestEnginePolling:
         assert await engine.refresh_now("missing") is None
 
 
+class TestUnifiedTickStamps:
+    async def test_tick_stamps_all_targets_with_same_timestamp(self, store, empty_target_store, rule_store):
+        """同一 tick 内所有标的时间戳一致——防 2 倍间隔漂移（>= 临界比较翻转）"""
+        add_target(empty_target_store)
+        empty_target_store.add(
+            {"name": "二号标的", "source": "fake_test", "symbol": "FAKE_GOLD", "schedule": "always"}
+        )
+        helpers.FakeSource.quotes = [
+            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=890.0),
+            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=891.0),
+        ]
+        engine = build_engine(store, empty_target_store, rule_store)
+        await engine._tick()
+
+        stamps = list(engine._last_poll.values())
+        assert len(stamps) == 2
+        assert len(set(stamps)) == 1, f"同一 tick 的 last_poll 应一致，实际: {stamps}"
+
+    async def test_manual_refresh_stamps_last_poll(self, store, empty_target_store, rule_store):
+        """手动刷新也要打点：30s 内引擎不重复轮询"""
+        target = add_target(empty_target_store)
+        helpers.FakeSource.quotes = [
+            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=890.0),
+            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=891.0),
+        ]
+        engine = build_engine(store, empty_target_store, rule_store)
+        await engine.refresh_now(target["id"])
+        assert target["id"] in engine._last_poll
+
+        # 手动刷新后立刻 _tick：不应重复轮询（quote 已被手动刷新消耗）
+        await engine._tick()
+        ticks = store.get_ticks(target["id"])
+        assert len(ticks) == 1, "手动刷新后 30s 内引擎不应重复轮询"
+
+
 class TestEngineRules:
     async def test_cross_above_fires_and_pushes(self, store, empty_target_store, rule_store):
         target = add_target(empty_target_store)

@@ -22,6 +22,8 @@ PriceBot：国内金价（上金所 AU9999 / 黄金T+D）监控推送系统。�
 
 ## 项目特有陷阱
 
+- **轮询节奏漂移（2026-10 生产实测+修复）**：`_tick` 里 `now - last_poll >= interval` 是临界比较。若在 gather 内按各 fetch 启动先后**逐个**打 `last_poll`，快源与慢 0.x 秒的源在同一轮拿到的毫秒差，会让快源每轮恰好踩线通过、慢源差几十毫秒被挤掉一轮——**稳定漂移成 2 倍轮询间隔**（30s 配置下黄金 30s、期货/币 60s，采样数据：gold :15/:45 vs 慢源 :16 每分钟一次）。修复：`_tick` 用 tick 起点的**同一时间戳统一打点**全部 due 标的，`_poll_target` 不再打点（手动刷新 `refresh_now` 自己打）。回归测试见 `tests/test_engine.py::TestUnifiedTickStamps`（不变量：同一 tick 的 last_poll 集合去重后长度为 1）
+
 - **跨 event loop**：监控引擎跑在后台线程的 loop；API 端点操作引擎一律 `services.run_bg(coro)`（内部 run_coroutine_threadsafe + wrap_future），别直接 await 引擎协程
 - **配置引用脱钩**：`apply_user_patch` 走 `deep_merge` 生成**新的嵌套 dict 对象**，构造时按引用捕获配置 dict 会与新配置脱钩（已踩过：渠道启用了但引擎看不见）。引擎/通知管理器必须用 **getter 惰性读取**（`MonitorEngine._get_config` / `NotificationManager._get_notify_config`）
 - **配置稀疏性**：只有 `user_settings.json`（用户层）落盘；默认层 `config/default_settings.json` 进 git。`PUT /api/settings` 要带 `config_hash` 版本号，不匹配 409

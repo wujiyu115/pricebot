@@ -103,6 +103,12 @@ class MonitorEngine:
 
         if not due:
             return
+        # 统一以 tick 起点打点：gather 内各协程按 fetch 启动先后差毫秒级打点时，
+        # `now - last_poll >= interval` 的临界比较会周期性翻转——快源恰好踩线
+        # 通过、慢 0.x 秒的源被系统性挤掉一轮，稳定漂移成 2 倍轮询间隔
+        # （2026-10 生产实测：30s 配置下快源 30s / 慢源 60s，详见 AGENTS.md）
+        for target in due:
+            self._last_poll[target["id"]] = now
         await asyncio.gather(*(self._poll_target(t) for t in due))
 
     def _target_interval(self, target: dict[str, Any]) -> int:
@@ -119,8 +125,6 @@ class MonitorEngine:
         target_id = target["id"]
         source_name = target.get("source") or ""
         symbol = target.get("symbol") or ""
-        async with self._lock:
-            self._last_poll[target_id] = time.time()
 
         try:
             source_cls = get_source_class(source_name)
@@ -151,6 +155,8 @@ class MonitorEngine:
         target = self._targets.get(target_id)
         if not target:
             return None
+        async with self._lock:
+            self._last_poll[target_id] = time.time()
         await self._poll_target(target)
         return self._status.get(target_id)
 
