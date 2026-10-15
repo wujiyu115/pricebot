@@ -1,0 +1,40 @@
+{
+  "language": "Chinese",
+  "monitor": {
+    "interval_seconds": 30,
+    "source_timeout_seconds": 10,
+    "history_retention_days": 90
+  },
+  "notify": {
+    "bark": {
+      "enabled": false,
+      "server": "https://api.day.app",
+      "device_keys": "",
+      "group": "PriceBot",
+      "sound": "",
+      "icon": "",
+      "level": ""
+    },
+    "telegram": {
+      "enabled": false,
+      "bot_token": "",
+      "chat_id": ""
+    },
+    "feishu": {
+      "enabled": false,
+      "webhook_url": "",
+      "secret": ""
+    },
+    "dingtalk": {
+      "enabled": false,
+      "webhook_url": "",
+      "secret": ""
+    },
+    "webhook": {
+      "enabled": false,
+      "url": "",
+      "method": "POST",
+      "headers": {}
+    }
+  }
+}

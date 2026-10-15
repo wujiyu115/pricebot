@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Runtime data (persisted volume in production)
+data/
+logs/
+config/user_settings.json
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Env
+.env
+
+# IDE/OS
+.idea/
+.vscode/
+.DS_Store
+*.log

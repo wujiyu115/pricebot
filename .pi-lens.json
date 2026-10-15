@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/apmantza/pi-lens/master/docs/schema/pi-lens-config-v1.json",
+  "ignore": [
+    "frontend/node_modules/**",
+    "frontend/dist/**",
+    "logs/**",
+    "data/**",
+    "frontend/src/components/ui/**"
+  ],
+  "lsp": {
+    "disabledServers": ["deno"]
+  }
+}

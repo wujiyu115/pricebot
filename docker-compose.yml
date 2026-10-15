@@ -1,0 +1,14 @@
+services:
+  pricebot:
+    build: .
+    image: wujiyu115/pricebot:latest
+    container_name: pricebot
+    restart: unless-stopped
+    ports:
+      - "6106:6106"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./logs:/app/logs

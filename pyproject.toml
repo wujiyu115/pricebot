@@ -1,0 +1,41 @@
+[project]
+name = "pricebot"
+version = "1.0.0"
+description = "国内金价监控推送系统 - 上金所 AU9999 / 黄金T+D 实时监控、规则告警、Bark 推送"
+authors = [{ name = "wujiyu115" }]
+readme = "README.md"
+requires-python = ">=3.10,<4.0"
+license = { text = "MIT" }
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "httpx>=0.28.1",
+    "loguru>=0.7.2",
+]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "RUF"]
+ignore = [
+    # FastAPI Depends() in argument defaults is the documented idiom
+    "B008",
+    # Chinese project: fullwidth punctuation in docstrings/strings is intended
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
