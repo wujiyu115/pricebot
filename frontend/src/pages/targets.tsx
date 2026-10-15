@@ -22,8 +22,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Switch } from "@/components/switch"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/table"
 import type { SourceInfo, Target } from "@/types"
 
 function TargetDialog({
