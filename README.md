@@ -40,8 +40,27 @@ docker run -d --name pricebot -p 6106:6106 \
 | A股股票/指数 | sina_stock | `sh600519` / `sz000001` / `sh000001`(上证指数) |
 | 商品期货主力连续 | sina_futures | `SC0`(原油) / `RB0`(螺纹) / `CU0`(铜) / `I0`(铁矿) / `AU0`(沪金) |
 | 加密货币（技术演示） | binance | `BTCUSDT` / `ETHUSDT` / `SOLUSDT` |
+| 电商商品售价 | generic_http | 任意服务端渲染价格的商品页/价格 API（URL + JSONPath/正则） |
 
 加密货币走 Binance 官方只读公共镜像（data-api.binance.vision），7x24 交易、涨跌幅按 24h 开盘基准。
+
+**电商商品监控**（generic_http 源，WebUI 标的表单选择「通用 HTTP 数据源」后填 URL + 提取规则）：
+
+```json
+{
+  "name": "Redmi 10X 4G",
+  "source": "generic_http",
+  "symbol": "MI_10000229",
+  "interval_seconds": 600,
+  "extra": {
+    "url": "https://www.mi.com/buy/detail?product_id=10000229",
+    "regex": "\"price\":\"([0-9.]+)\""
+  }
+}
+```
+
+- JSON 接口填 `json_path`（如 `data.price`），HTML/文本填 `regex`（第一个捕获组），支持自定义 headers（带 Cookie 调用三方价格接口）
+- 实测可用：小米商城（服务端渲染、价格未混淆）；**京东/淘宝商品页价格由 JS 登录后加载且服务端混淆**（`"price":"4??"`），不支持直接抓取——请改用带 Cookie 的价格接口或三方比价 API
 A股代码规则：`sh`/`sz`/`bj` + 6 位数字；指数 `sh000xxx`/`sz399xxx`（单位:点）。涨跌幅按昨收自动计算。
 期货代码规则：品种 + 0（主力连续），如 `SC0`/`RB0`/`CU0`/`HC0`/`J0`/`M0`/`TA0`/`AU0`/`AG0`；涨跌幅按昨结算计算；单位按品种映射（原油=元/桶、金=元/克、银=元/千克、其余=元/吨，可用标的 extra.unit 覆盖）。
 

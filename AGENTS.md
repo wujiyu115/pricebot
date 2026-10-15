@@ -14,6 +14,7 @@ PriceBot：国内金价（上金所 AU9999 / 黄金T+D）监控推送系统。�
 
 - 新浪 `SGE_AU9999` / `SGE_AUTD` 夜盘长期有效；字段布局见 `app/core/sources/sina.py` 顶部注释（**2026-10 实测**：f11=最新价、f9/f10=买一/卖一、f5=昨收、f16=时间戳）
 - 新浪 A股 `sh600519`/`sz000001`/`sh000001`(上证指数)：字段布局见 `app/core/sources/sina_stock.py` 顶部注释（f3=最新价、f2=昨收、f6/f7=买一/卖一、f8=成交量(股)、f9=成交额(元)）；指数买一/卖一为 0，适配器归一化为 None；sh000xxx/sz399xxx 系指数，单位=「点」
+- 电商商品价：京东/淘宝商品页价格服务端**掩码混淆**（2026-10 实测 `"price":"4??"` + 登录态由 JS 组装），服务端直抓不可行；小米商城 `www.mi.com/buy/detail?product_id=X` 服务端渲染未混淆（`"price":"999"` JSON 内嵌），generic_http + regex 可用——电商标的走 generic_http 源
 - Binance 公共镜像 `data-api.binance.vision/api/v3/ticker/24hr?symbol=BTCUSDT`：JSON 接口（非 GBK 串）；`api.binance.com` 主站及 OKX/CoinGecko 在本网络实测不可达（2026-10），镜像可达；Gate 备选 `api.gateio.ws/api/v4/spot/tickers`；CryptoCompare 已需 API key
 - 新浪国内期货 主力连续（`SC0`/`RB0`/`CU0` 等，品种+0）：**必须 `nf_` 前缀请求**（`list=nf_SC0`），不带前缀的 28 字段旧格式返回的是 2024 年静态历史数据（已踩坑）；月份合约（SC2501）此接口不支持；nf_ 布局见 `app/core/sources/sina_futures.py` 顶部注释（f8=最新价、f10=昨结=涨跌幅基准、f6/f7=买一/卖一、f13=持仓、f14=成交量）；单位按品种映射（SC=元/桶、AU=元/克、AG=元/千克、其余缺省元/吨），target.extra["unit"] 可覆盖
 - 上金所官网 `POST https://www.sge.com.cn/graph/Dailyhq`，form `instid=Au99.99`（注意 URL 编码：`Au(T+D)` 必须编码成 `Au%28T%2BD%29`，query string 里 `+` 会变空格）

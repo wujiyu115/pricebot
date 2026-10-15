@@ -42,6 +42,9 @@ function TargetDialog({
     const [source, setSource] = useState("")
     const [symbol, setSymbol] = useState("")
     const [schedule, setSchedule] = useState<"always" | "sge" | "cn_stock" | "cn_futures">("always")
+    const [ghUrl, setGhUrl] = useState("")
+    const [ghJsonPath, setGhJsonPath] = useState("")
+    const [ghRegex, setGhRegex] = useState("")
 
     // 打开时回填
     useEffect(() => {
@@ -50,6 +53,10 @@ function TargetDialog({
             setSource(editing?.source ?? "sina")
             setSymbol(editing?.symbol ?? "")
             setSchedule(editing?.schedule ?? "always")
+            const gh = editing?.extra as Record<string, string> | undefined
+            setGhUrl(gh?.url ?? "")
+            setGhJsonPath(gh?.json_path ?? "")
+            setGhRegex(gh?.regex ?? "")
         }
     }, [open, editing])
 
@@ -57,7 +64,13 @@ function TargetDialog({
 
     const mutation = useMutation({
         mutationFn: async () => {
-            const payload = { name, source, symbol, schedule }
+            const payload: Record<string, unknown> = { name, source, symbol, schedule }
+            if (source === "generic_http") {
+                const extra: Record<string, string> = { url: ghUrl }
+                if (ghJsonPath) extra.json_path = ghJsonPath
+                if (ghRegex) extra.regex = ghRegex
+                payload.extra = extra
+            }
             if (editing) return api.updateTarget(editing.id, payload)
             return api.createTarget(payload)
         },
@@ -119,6 +132,38 @@ function TargetDialog({
                             </div>
                         )}
                     </div>
+                    {source === "generic_http" && (
+                        <div className="space-y-3 rounded-md border p-3">
+                            <div className="space-y-1.5">
+                                <Label>接口 URL（必填）</Label>
+                                <Input
+                                    value={ghUrl}
+                                    onChange={(e) => setGhUrl(e.target.value)}
+                                    placeholder="https://www.mi.com/buy/detail?product_id=10000229"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>JSONPath（JSON 接口）</Label>
+                                <Input
+                                    value={ghJsonPath}
+                                    onChange={(e) => setGhJsonPath(e.target.value)}
+                                    placeholder="data.price（与正则二选一）"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>正则（HTML/文本，第一个捕获组）</Label>
+                                <Input
+                                    value={ghRegex}
+                                    onChange={(e) => setGhRegex(e.target.value)}
+                                    placeholder={'"price":"([0-9.]+)"'}
+                                />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                适合服务端渲染价格的商城/API；京东/淘宝商品页价格由 JS
+                                加载且需登录，不支持直接抓取，请用带 Cookie 的三方价格接口。
+                            </p>
+                        </div>
+                    )}
                     <div className="space-y-1.5">
                         <Label>轮询时段</Label>
                         <Select

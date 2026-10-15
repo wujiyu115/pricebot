@@ -62,9 +62,7 @@ class BinanceSource(SourceAdapter):
         base_24h = parse_float(data.get("openPrice"))
         close_time = data.get("closeTime")
         time_str = (
-            datetime.fromtimestamp(int(close_time) / 1000).strftime("%Y-%m-%d %H:%M:%S")
-            if close_time
-            else ""
+            datetime.fromtimestamp(int(close_time) / 1000).strftime("%Y-%m-%d %H:%M:%S") if close_time else ""
         )
 
         return Quote(

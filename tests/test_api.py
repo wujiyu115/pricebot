@@ -75,6 +75,29 @@ class TestTargetsAPI:
         )
         assert resp.status_code == 422
 
+    def test_generic_http_extra_roundtrip(self, client):
+        """电商/自定义接口标的: extra(url/json_path/regex) 完整保存与更新"""
+        extra = {
+            "url": "https://www.mi.com/buy/detail?product_id=10000229",
+            "regex": '"price":"([0-9.]+)"',
+        }
+        resp = client.post(
+            "/api/targets",
+            json={"name": "小米商品监控", "source": "generic_http", "symbol": "MI_10000229", "extra": extra},
+        )
+        assert resp.status_code == 201
+        target = resp.json()["target"]
+        assert target["extra"] == extra
+
+        # PATCH 替换 extra
+        resp = client.patch(
+            f"/api/targets/{target['id']}",
+            json={"extra": {"url": "https://example.com/p", "json_path": "data.price"}},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["target"]["extra"] == {"url": "https://example.com/p", "json_path": "data.price"}
+        assert client.delete(f"/api/targets/{target['id']}").status_code == 200
+
     def test_refresh_unknown_target(self, client):
         assert client.post("/api/targets/zzz/refresh").status_code == 404
 
