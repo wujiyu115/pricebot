@@ -22,7 +22,7 @@ export interface Target {
     source: string
     symbol: string
     enabled: boolean
-    schedule?: "always" | "sge" | "cn_stock"
+    schedule?: "always" | "sge" | "cn_stock" | "cn_futures"
     interval_seconds?: number | null
     extra?: Record<string, unknown>
     _status?: {

@@ -78,6 +78,36 @@ class TestCnStockHours:
         assert is_cn_stock_trading_time(dt(0, "09:14")) is False
 
 
+class TestCnFuturesHours:
+    def setup_method(self):
+        from app.core.monitor.trading_hours import is_cn_futures_trading_time
+
+        self.fn = is_cn_futures_trading_time
+
+    def test_day_sessions(self):
+        assert self.fn(dt(0, "09:00")) is True
+        assert self.fn(dt(0, "10:30")) is True
+        assert self.fn(dt(0, "11:30")) is True
+        assert self.fn(dt(0, "12:00")) is False  # 午休
+        assert self.fn(dt(0, "13:30")) is True
+        assert self.fn(dt(4, "15:00")) is True
+        assert self.fn(dt(0, "08:59")) is False
+
+    def test_night_session(self):
+        assert self.fn(dt(0, "21:00")) is True
+        assert self.fn(dt(2, "23:59")) is True
+        assert self.fn(dt(2, "01:00")) is True  # 周三凌晨=周二夜盘
+        assert self.fn(dt(5, "02:30")) is True  # 周六凌晨=周五夜盘
+        assert self.fn(dt(5, "02:31")) is False
+        assert self.fn(dt(0, "01:00")) is False  # 周一凌晨=周日晚无夜盘
+        assert self.fn(dt(6, "22:00")) is False  # 周六晚无夜盘
+
+    def test_should_poll_schedule(self):
+        assert should_poll("cn_futures", dt(0, "10:00")) is True
+        assert should_poll("cn_futures", dt(6, "10:00")) is False
+        assert should_poll("cn_futures", dt(0, "12:00")) is False
+
+
 class TestShouldPoll:
     def test_always(self):
         assert should_poll("always", dt(6, "10:00")) is True

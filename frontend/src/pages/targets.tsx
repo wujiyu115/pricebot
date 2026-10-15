@@ -41,7 +41,7 @@ function TargetDialog({
     const [name, setName] = useState("")
     const [source, setSource] = useState("")
     const [symbol, setSymbol] = useState("")
-    const [schedule, setSchedule] = useState<"always" | "sge" | "cn_stock">("always")
+    const [schedule, setSchedule] = useState<"always" | "sge" | "cn_stock" | "cn_futures">("always")
 
     // 打开时回填
     useEffect(() => {
@@ -123,7 +123,9 @@ function TargetDialog({
                         <Label>轮询时段</Label>
                         <Select
                             value={schedule}
-                            onValueChange={(v) => setSchedule(v as "always" | "sge" | "cn_stock")}
+                            onValueChange={(v) =>
+                                setSchedule(v as "always" | "sge" | "cn_stock" | "cn_futures")
+                            }
                         >
                             <SelectTrigger>
                                 <SelectValue />
@@ -132,6 +134,7 @@ function TargetDialog({
                                 <SelectItem value="always">全时段</SelectItem>
                                 <SelectItem value="sge">仅上金所交易时段</SelectItem>
                                 <SelectItem value="cn_stock">仅A股交易时段</SelectItem>
+                                <SelectItem value="cn_futures">仅国内期货交易时段</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

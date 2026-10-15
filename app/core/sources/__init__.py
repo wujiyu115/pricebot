@@ -14,6 +14,7 @@ from .base import (
 from .generic_http import GenericHTTPSource
 from .sge_daily import SGEDailySource
 from .sina import SinaSource
+from .sina_futures import SinaFuturesSource
 from .sina_stock import SinaStockSource
 
 
@@ -23,6 +24,7 @@ def load_builtin_sources() -> None:
     assert SGEDailySource.name
     assert GenericHTTPSource.name
     assert SinaStockSource.name
+    assert SinaFuturesSource.name
 
 
 __all__ = [
