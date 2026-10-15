@@ -47,9 +47,15 @@ class TestTicks:
 class TestAlerts:
     def test_add_list_and_order(self, store):
         store.add_alert(
-    100.0, "r1", "t1", "上穿900", 900.5, "msg", ["bark"],
-    [{"channel": "bark", "ok": True, "detail": ""}],
-)
+            100.0,
+            "r1",
+            "t1",
+            "上穿900",
+            900.5,
+            "msg",
+            ["bark"],
+            [{"channel": "bark", "ok": True, "detail": ""}],
+        )
         store.add_alert(200.0, "r2", "t1", "涨幅", 910.0, "msg2", [], [])
         alerts = store.list_alerts()
         assert len(alerts) == 2

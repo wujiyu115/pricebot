@@ -18,8 +18,7 @@ async def dashboard(services=Depends(get_services)):
     recent_alerts = await to_thread(services.store.list_alerts, 10)
     return {
         "engine": {
-            "running": services.loop_service.loop is not None
-            and services.loop_service.loop.is_running(),
+            "running": services.loop_service.loop is not None and services.loop_service.loop.is_running(),
             "interval_seconds": services.engine.interval,
         },
         "counts": {

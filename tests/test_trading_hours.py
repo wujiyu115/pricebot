@@ -49,6 +49,35 @@ class TestTradingHours:
         assert is_sge_trading_time(dt(6, "10:00")) is False
 
 
+class TestCnStockHours:
+    def test_morning_session(self):
+        from app.core.monitor.trading_hours import is_cn_stock_trading_time
+
+        assert is_cn_stock_trading_time(dt(0, "09:15")) is True  # 集合竞价
+        assert is_cn_stock_trading_time(dt(0, "09:30")) is True
+        assert is_cn_stock_trading_time(dt(2, "11:30")) is True
+
+    def test_lunch_break(self):
+        from app.core.monitor.trading_hours import is_cn_stock_trading_time
+
+        assert is_cn_stock_trading_time(dt(0, "11:31")) is False
+        assert is_cn_stock_trading_time(dt(0, "12:30")) is False
+
+    def test_afternoon_session(self):
+        from app.core.monitor.trading_hours import is_cn_stock_trading_time
+
+        assert is_cn_stock_trading_time(dt(0, "13:00")) is True
+        assert is_cn_stock_trading_time(dt(4, "15:00")) is True
+        assert is_cn_stock_trading_time(dt(4, "15:01")) is False
+
+    def test_weekend_and_evening(self):
+        from app.core.monitor.trading_hours import is_cn_stock_trading_time
+
+        assert is_cn_stock_trading_time(dt(5, "10:00")) is False
+        assert is_cn_stock_trading_time(dt(6, "10:00")) is False
+        assert is_cn_stock_trading_time(dt(0, "09:14")) is False
+
+
 class TestShouldPoll:
     def test_always(self):
         assert should_poll("always", dt(6, "10:00")) is True
@@ -57,3 +86,8 @@ class TestShouldPoll:
     def test_sge_schedule(self):
         assert should_poll("sge", dt(0, "10:00")) is True
         assert should_poll("sge", dt(6, "10:00")) is False
+
+    def test_cn_stock_schedule(self):
+        assert should_poll("cn_stock", dt(0, "10:00")) is True
+        assert should_poll("cn_stock", dt(6, "10:00")) is False
+        assert should_poll("cn_stock", dt(0, "12:30")) is False

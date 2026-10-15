@@ -37,6 +37,9 @@ docker run -d --name pricebot -p 6106:6106 \
 | --- | --- | --- |
 | 上金所黄金9999 | sina | `SGE_AU9999` |
 | 上金所黄金T+D | sina | `SGE_AUTD` |
+| A股股票/指数 | sina_stock | `sh600519` / `sz000001` / `sh000001`(上证指数) |
+
+A股代码规则：`sh`/`sz`/`bj` + 6 位数字；指数 `sh000xxx`/`sz399xxx`（单位:点）。涨跌幅按昨收自动计算。
 
 ## 项目结构
 

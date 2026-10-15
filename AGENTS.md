@@ -13,8 +13,9 @@ PriceBot：国内金价（上金所 AU9999 / 黄金T+D）监控推送系统。�
 ### 已知可用的真实测试数据
 
 - 新浪 `SGE_AU9999` / `SGE_AUTD` 夜盘长期有效；字段布局见 `app/core/sources/sina.py` 顶部注释（**2026-10 实测**：f11=最新价、f9/f10=买一/卖一、f5=昨收、f16=时间戳）
+- 新浪 A股 `sh600519`/`sz000001`/`sh000001`(上证指数)：字段布局见 `app/core/sources/sina_stock.py` 顶部注释（f3=最新价、f2=昨收、f6/f7=买一/卖一、f8=成交量(股)、f9=成交额(元)）；指数买一/卖一为 0，适配器归一化为 None；sh000xxx/sz399xxx 系指数，单位=「点」
 - 上金所官网 `POST https://www.sge.com.cn/graph/Dailyhq`，form `instid=Au99.99`（注意 URL 编码：`Au(T+D)` 必须编码成 `Au%28T%2BD%29`，query string 里 `+` 会变空格）
-- SGE 交易时段参考 `app/core/monitor/trading_hours.py`（夜盘跨零点归属前一晚）
+- SGE 交易时段参考 `app/core/monitor/trading_hours.py`（夜盘跨零点归属前一晚）；A股时段 `cn_stock`：9:15 集合竞价起 - 11:30 / 13:00-15:00
 
 ## 项目特有陷阱
 

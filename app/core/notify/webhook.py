@@ -40,4 +40,3 @@ class WebhookNotifier(Notifier):
 
 
 __all__ = ["WebhookNotifier"]
-

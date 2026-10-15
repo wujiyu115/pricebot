@@ -16,6 +16,11 @@ _DAY_SESSIONS = (
     (dtime(9, 0), dtime(11, 30)),
     (dtime(13, 30), dtime(15, 30)),
 )
+# A股: 9:15 集合竞价起有成交价, 11:30-13:00 午休
+_CN_STOCK_SESSIONS = (
+    (dtime(9, 15), dtime(11, 30)),
+    (dtime(13, 0), dtime(15, 0)),
+)
 
 
 def is_sge_trading_time(dt: datetime) -> bool:
@@ -35,17 +40,27 @@ def is_sge_trading_time(dt: datetime) -> bool:
     return 0 < weekday <= 5 and t <= _NIGHT_END
 
 
+def is_cn_stock_trading_time(dt: datetime) -> bool:
+    """A股交易时段: 周一~周五 9:15-11:30, 13:00-15:00（含集合竞价）。"""
+    if dt.weekday() >= 5:
+        return False
+    t = dt.time()
+    return any(start <= t <= end for start, end in _CN_STOCK_SESSIONS)
+
+
 def now_is_sge_trading_time() -> bool:
     return is_sge_trading_time(datetime.now())
 
 
 def should_poll(schedule: str | None, dt: datetime) -> bool:
-    """schedule: "always"(默认) | "sge" | None。"""
+    """schedule: "always"(默认) | "sge" | "cn_stock" | None。"""
     if not schedule or schedule == "always":
         return True
     if schedule == "sge":
         return is_sge_trading_time(dt)
+    if schedule == "cn_stock":
+        return is_cn_stock_trading_time(dt)
     return True
 
 
-__all__ = ["is_sge_trading_time", "now_is_sge_trading_time", "should_poll"]
+__all__ = ["is_cn_stock_trading_time", "is_sge_trading_time", "now_is_sge_trading_time", "should_poll"]

@@ -52,4 +52,3 @@ class DingTalkNotifier(Notifier):
 
 
 __all__ = ["DingTalkNotifier"]
-

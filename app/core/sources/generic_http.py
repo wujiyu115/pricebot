@@ -74,9 +74,7 @@ class GenericHTTPSource(SourceAdapter):
         raw_value = self._extract(resp, extra)
         value = parse_float(raw_value)
         if value is None:
-            raise SourceError(
-                f"generic_http extracted non-numeric value {raw_value!r} from {url}"
-            )
+            raise SourceError(f"generic_http extracted non-numeric value {raw_value!r} from {url}")
         return Quote(symbol=symbol, name=str(extra.get("name") or symbol), last=value)
 
     def _extract(self, resp: httpx.Response, extra: dict[str, Any]) -> Any:

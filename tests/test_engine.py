@@ -101,9 +101,7 @@ class TestEngineRules:
                 threshold=900.0,
             ).as_dict()
         )
-        helpers.FakeSource.quotes = [
-            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=880.0)
-        ]
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=880.0)]
         engine = build_engine(store, empty_target_store, rule_store)
         await engine.refresh_now(target["id"])
         assert helpers.PUSHED == []
@@ -126,9 +124,7 @@ class TestEngineRules:
         engine = build_engine(store, empty_target_store, rule_store)
 
         for price in (905.0, 905.0, 905.0):
-            helpers.FakeSource.quotes = [
-                helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=price)
-            ]
+            helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=price)]
             await engine.refresh_now(target["id"])
 
         # 前两次 pending，第三次才触发一次
@@ -137,15 +133,11 @@ class TestEngineRules:
 
         # 触发后 streak 归零：需重新连续确认 3 次才会再次触发
         for price in (906.0, 906.0):
-            helpers.FakeSource.quotes = [
-                helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=price)
-            ]
+            helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=price)]
             await engine.refresh_now(target["id"])
         assert len(helpers.PUSHED) == 1  # 前两次仍是 pending
 
-        helpers.FakeSource.quotes = [
-            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=906.0)
-        ]
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=906.0)]
         await engine.refresh_now(target["id"])
         assert len(helpers.PUSHED) == 2  # 冷却为 0，第三次确认后再次触发
 
@@ -165,9 +157,7 @@ class TestEngineRules:
         engine = build_engine(store, empty_target_store, rule_store)
 
         for price in (875.0, 875.0):
-            helpers.FakeSource.quotes = [
-                helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=price)
-            ]
+            helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=price)]
             await engine.refresh_now(target["id"])
 
         # 第一次触发，第二次被 60 分钟冷却压掉
@@ -189,16 +179,12 @@ class TestEngineRules:
         engine = build_engine(store, empty_target_store, rule_store)
 
         # 第一笔：880.0（成为窗口基准价）
-        helpers.FakeSource.quotes = [
-            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=880.0)
-        ]
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=880.0)]
         await engine.refresh_now(target["id"])
         assert helpers.PUSHED == []
 
         # 第二笔：890.0 -> +1.14%，触发
-        helpers.FakeSource.quotes = [
-            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=890.0)
-        ]
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=890.0)]
         await engine.refresh_now(target["id"])
         assert len(helpers.PUSHED) == 1
         assert "窗口基准" in helpers.PUSHED[0][1].body
@@ -210,9 +196,7 @@ class TestLiveView:
         empty_target_store.add(
             {"name": "停用标的", "source": "fake_test", "symbol": "FAKE_GOLD", "enabled": False}
         )
-        helpers.FakeSource.quotes = [
-            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=895.0)
-        ]
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=895.0)]
         engine = build_engine(store, empty_target_store, rule_store)
         await engine.refresh_now(target["id"])
 
@@ -227,9 +211,7 @@ class TestTickScheduling:
     async def test_disabled_target_not_polled(self, store, empty_target_store, rule_store):
         target = add_target(empty_target_store)
         empty_target_store.update(target["id"], {"enabled": False})
-        helpers.FakeSource.quotes = [
-            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=895.0)
-        ]
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=895.0)]
         engine = build_engine(store, empty_target_store, rule_store)
         await engine._tick()
         assert store.get_ticks(target["id"]) == []
@@ -239,16 +221,12 @@ class TestTickScheduling:
 
         target = add_target(empty_target_store)
         empty_target_store.update(target["id"], {"schedule": "sge"})
-        helpers.FakeSource.quotes = [
-            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=895.0)
-        ]
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=895.0)]
         engine = build_engine(store, empty_target_store, rule_store)
 
         # 周六 10:00，非交易时段
         saturday = datetime.datetime(2026, 10, 17, 10, 0)
-        monkeypatch.setattr(
-            "app.core.monitor.engine.datetime", SimpleDatetime(saturday)
-        )
+        monkeypatch.setattr("app.core.monitor.engine.datetime", SimpleDatetime(saturday))
         await engine._tick()
         assert store.get_ticks(target["id"]) == []
 

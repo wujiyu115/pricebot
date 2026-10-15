@@ -27,4 +27,3 @@ __all__ = [
     "load_builtin_notifiers",
     "register",
 ]
-

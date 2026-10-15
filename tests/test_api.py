@@ -278,4 +278,3 @@ class TestDashboard:
         assert body["engine"]["running"] is True
         assert body["counts"]["targets"] >= 2
         assert "sina" in body["sources"]
-

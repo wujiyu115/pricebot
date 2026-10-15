@@ -52,4 +52,3 @@ class FeishuNotifier(Notifier):
 
 
 __all__ = ["FeishuNotifier"]
-

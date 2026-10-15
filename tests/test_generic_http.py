@@ -87,9 +87,7 @@ class TestGenericFetch:
 
         mock_transport(handler)
         with pytest.raises(SourceError):
-            await GenericHTTPSource().fetch(
-                "X", {"url": "https://api.test/p", "json_path": "data.price"}
-            )
+            await GenericHTTPSource().fetch("X", {"url": "https://api.test/p", "json_path": "data.price"})
 
     async def test_json_path_miss_raises(self, mock_transport):
         def handler(request: httpx.Request) -> httpx.Response:
@@ -97,9 +95,7 @@ class TestGenericFetch:
 
         mock_transport(handler)
         with pytest.raises(SourceError):
-            await GenericHTTPSource().fetch(
-                "X", {"url": "https://api.test/p", "json_path": "data.price"}
-            )
+            await GenericHTTPSource().fetch("X", {"url": "https://api.test/p", "json_path": "data.price"})
 
     async def test_regex_miss_raises(self, mock_transport):
         def handler(request: httpx.Request) -> httpx.Response:
@@ -107,6 +103,4 @@ class TestGenericFetch:
 
         mock_transport(handler)
         with pytest.raises(SourceError):
-            await GenericHTTPSource().fetch(
-                "X", {"url": "https://api.test/p", "regex": r"(missing)"}
-            )
+            await GenericHTTPSource().fetch("X", {"url": "https://api.test/p", "regex": r"(missing)"})

@@ -73,6 +73,7 @@ class SinaSource(SourceAdapter):
             volume=parse_float(fields[14]) if len(fields) > 14 else None,
             turnover=parse_float(fields[15]) if len(fields) > 15 else None,
             time=fields[16] if len(fields) > 16 else "",
+            unit="元/克",
         )
 
 

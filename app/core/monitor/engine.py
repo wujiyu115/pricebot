@@ -223,6 +223,7 @@ class MonitorEngine:
     ) -> tuple[str, str]:
         assert quote.last is not None
         name = target.get("name") or quote.name or quote.symbol
+        unit = quote.unit or "元/克"
         change_str = ""
         if quote.prev_close:
             pct = (quote.last - quote.prev_close) / quote.prev_close * 100
@@ -230,7 +231,7 @@ class MonitorEngine:
 
         title = f"{name} {rule_type_label(rule.type)}"
         lines = [
-            f"{name}：{quote.last:.2f} 元/克{change_str}",
+            f"{name}：{quote.last:.2f} {unit}{change_str}",
             f"规则：{rule.name}（{rule_type_label(rule.type)}",
         ]
         detail = describe_condition(rule, quote.last, history, now)

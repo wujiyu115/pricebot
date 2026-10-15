@@ -100,6 +100,13 @@ class TargetStore(_JsonStore):
             "enabled": True,
             "schedule": "sge",
         },
+        {
+            "name": "上证指数",
+            "source": "sina_stock",
+            "symbol": "sh000001",
+            "enabled": True,
+            "schedule": "cn_stock",
+        },
     ]
 
     def __init__(self, path: Path) -> None:
@@ -119,11 +126,7 @@ class RuleStore(_JsonStore):
         return [Rule.from_dict(item) for item in self.list()]
 
     def list_enabled_for(self, target_id: str) -> list[Rule]:
-        return [
-            rule
-            for rule in self.list_rules()
-            if rule.enabled and rule.target_id == target_id
-        ]
+        return [rule for rule in self.list_rules() if rule.enabled and rule.target_id == target_id]
 
 
 __all__ = ["RuleStore", "TargetStore", "new_id"]

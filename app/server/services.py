@@ -36,9 +36,7 @@ class AppServices:
             self.config_manager.user_config.get("monitor", {}).get("history_retention_days") or 90
         )
         self.store = Store(data_dir / "pricebot.db", retention_days=retention)
-        self.notifier = NotificationManager(
-            lambda: self.config_manager.user_config.get("notify", {})
-        )
+        self.notifier = NotificationManager(lambda: self.config_manager.user_config.get("notify", {}))
         self.engine = MonitorEngine(
             target_store=self.target_store,
             rule_store=self.rule_store,
@@ -70,4 +68,3 @@ class AppServices:
 
 
 __all__ = ["AppServices"]
-

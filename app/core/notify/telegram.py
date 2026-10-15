@@ -39,4 +39,3 @@ class TelegramNotifier(Notifier):
 
 
 __all__ = ["TelegramNotifier"]
-

@@ -13,6 +13,7 @@ export interface Quote {
     volume: number | null
     turnover: number | null
     time: string
+    unit?: string
 }
 
 export interface Target {
@@ -21,7 +22,7 @@ export interface Target {
     source: string
     symbol: string
     enabled: boolean
-    schedule?: "always" | "sge"
+    schedule?: "always" | "sge" | "cn_stock"
     interval_seconds?: number | null
     extra?: Record<string, unknown>
     _status?: {

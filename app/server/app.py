@@ -62,4 +62,3 @@ def _mount_spa(app: FastAPI) -> None:
         return FileResponse(dist_dir / "index.html")
 
     logger.info(f"Serving frontend from {dist_dir}")
-

@@ -36,6 +36,7 @@ class Quote:
     volume: float | None = None
     turnover: float | None = None
     time: str = ""
+    unit: str = ""  # 元/克（贵金属）、元（股票）、点（指数）
     extra: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
@@ -52,6 +53,7 @@ class Quote:
             "volume": self.volume,
             "turnover": self.turnover,
             "time": self.time,
+            "unit": self.unit,
         }
 
 

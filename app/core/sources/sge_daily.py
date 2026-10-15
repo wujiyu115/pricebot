@@ -56,6 +56,7 @@ class SGEDailySource(SourceAdapter):
             low=low,
             time=f"{date} 00:00:00",
             extra={"daily": True},
+            unit="元/克",
         )
 
     async def fetch_daily(self, symbol: str, days: int = 120) -> list[list[Any]]:

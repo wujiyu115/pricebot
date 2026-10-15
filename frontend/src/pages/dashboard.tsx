@@ -42,7 +42,7 @@ function QuoteCard({
                     <div>
                         <div className="flex items-baseline gap-2">
                             <span className="text-3xl font-semibold tabular-nums">{last.toFixed(2)}</span>
-                            <span className="text-sm text-muted-foreground">元/克</span>
+                            <span className="text-sm text-muted-foreground">{quote?.unit ?? "元/克"}</span>
                             {pct != null && (
                                 <span
                                     className={cn(
