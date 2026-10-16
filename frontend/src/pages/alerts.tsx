@@ -125,35 +125,40 @@ export function AlertsPage() {
                             {alerts?.map((a) => {
                                 const ok = a.results?.some((r) => r.ok)
                                 const failed = a.results?.find((r) => !r.ok)
+                                const renderResult = () => {
+                                    if (a.results == null || a.results.length === 0)
+                                        return (
+                                            <Badge variant="outline" className="text-muted-foreground">
+                                                无渠道结果
+                                            </Badge>
+                                        )
+                                    if (ok)
+                                        return (
+                                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                                                已推送 {a.results.length} 渠道
+                                            </Badge>
+                                        )
+                                    return (
+                                        <Badge
+                                            variant="destructive"
+                                            className="max-w-56 truncate"
+                                            title={failed?.detail}
+                                        >
+                                            失败: {failed?.detail ?? "未知"}
+                                        </Badge>
+                                    )
+                                }
                                 return (
                                     <TableRow key={a.id} title={a.message}>
                                         <TableCell className="whitespace-nowrap text-muted-foreground">
                                             {fmtTime(a.ts)}
                                         </TableCell>
                                         <TableCell className="font-medium">{a.rule_name}</TableCell>
-                                        <TableCell>{nameById.get(a.target_id) ?? a.target_id}</TableCell>
+                                        <TableCell>{(nameById.get(a.target_id) ?? a.target_id) || "—"}</TableCell>
                                         <TableCell className="text-right tabular-nums">
-                                            {a.price != null ? a.price.toFixed(2) : "—"}
+                                            {a.price == null ? "—" : a.price.toFixed(2)}
                                         </TableCell>
-                                        <TableCell>
-                                            {a.results == null || a.results.length === 0 ? (
-                                                <Badge variant="outline" className="text-muted-foreground">
-                                                    无渠道结果
-                                                </Badge>
-                                            ) : ok ? (
-                                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-                                                    已推送 {a.results.length} 渠道
-                                                </Badge>
-                                            ) : (
-                                                <Badge
-                                                    variant="destructive"
-                                                    className="max-w-56 truncate"
-                                    title={failed?.detail}
-                                >
-                                    失败: {failed?.detail ?? "未知"}
-                                </Badge>
-                                            )}
-                                        </TableCell>
+                                        <TableCell>{renderResult()}</TableCell>
                                     </TableRow>
                                 )
                             })}
