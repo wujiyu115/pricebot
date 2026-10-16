@@ -357,7 +357,7 @@ class TestSourceErrorNotify:
 
 
 class TestBriefingNotify:
-    """行情简报：每个标的按时间间隔（N 天）推一次当前价，无需告警规则。"""
+    """聚合行情简报：所有标的最新价合并成**一条**推送，全局单一计时。"""
 
     @staticmethod
     def _config(**overrides) -> dict:
@@ -377,30 +377,89 @@ class TestBriefingNotify:
 
         target = add_target(empty_target_store)
         engine = build_engine(store, empty_target_store, rule_store, self._config())
-        tid = target["id"]
 
         helpers.FakeSource.quotes = [self._quote(897.0)]
-        await engine.refresh_now(tid)  # 首次成功即推
+        await engine.refresh_now(target["id"])  # 首次成功即推（聚合）
         assert len(helpers.PUSHED) == 1
         msg = helpers.PUSHED[0][1]
-        assert "测试黄金" in msg.title
-        assert "897.00" in msg.title
-        assert "较昨收 -0.33%" in msg.title
+        assert "价格简报" in msg.title
+        assert "1 个标的" in msg.title
+        assert "测试黄金" in msg.body
+        assert "897.00" in msg.body
+        assert "较昨收 -0.33%" in msg.body
         assert "每 1 天一次" in msg.body
         alerts = store.list_alerts(limit=10)
-        assert alerts[0]["rule_id"] == "briefing" and alerts[0]["price"] == 897.0
+        assert alerts[0]["rule_id"] == "briefing" and alerts[0]["price"] is None
 
         for _ in range(3):
             helpers.FakeSource.quotes = [self._quote(898.0)]
-            await engine.refresh_now(tid)  # 间隔未到：不推
+            await engine.refresh_now(target["id"])  # 间隔未到：不推
         assert len(helpers.PUSHED) == 1
 
         # 时间回拨：上次推送时间改为 1 天前 -> 再推
-        engine._brief_sent_at[tid] = time.time() - 86400 - 1
+        engine._brief_sent_at = time.time() - 86400 - 1
         helpers.FakeSource.quotes = [self._quote(900.0)]
-        await engine.refresh_now(tid)
+        await engine.refresh_now(target["id"])
         assert len(helpers.PUSHED) == 2
-        assert store.list_alerts(limit=1)[0]["price"] == 900.0
+        assert "900.00" in helpers.PUSHED[1][1].body
+
+    async def test_all_targets_in_one_message(self, store, empty_target_store, rule_store):
+        import time
+
+        t1 = add_target(empty_target_store)
+        t2 = empty_target_store.add(
+            {"name": "另一个", "source": "fake_test", "symbol": "FAKE_GOLD", "schedule": "always"}
+        )
+        t3 = empty_target_store.add(
+            {"name": "暂无报价", "source": "fake_test", "symbol": "FAKE_GOLD", "schedule": "always"}
+        )
+        engine = build_engine(store, empty_target_store, rule_store, self._config())
+
+        # 首次成功轮询即推：此刻只有 t1 有报价，消息仅含 1 个标的
+        helpers.FakeSource.quotes = [self._quote(895.0), self._quote(896.0), self._quote(897.0)]
+        await engine.refresh_now(t1["id"])
+        assert len(helpers.PUSHED) == 1
+        msg = helpers.PUSHED[0][1]
+        assert "1 个标的" in msg.title
+        assert "测试黄金" in msg.body and "895.00" in msg.body
+        # 其余标的尚未轮询：尾部汇总一句
+        assert "另有 2 个标的暂无报价" in msg.body
+
+        await engine.refresh_now(t2["id"])  # 计时未到：不推
+        assert len(helpers.PUSHED) == 1
+
+        # 回拨后轮询第 3 个标的：一条消息聚齐全部 3 个报价
+        engine._brief_sent_at = time.time() - 86400 - 1
+        await engine.refresh_now(t3["id"])
+        assert len(helpers.PUSHED) == 2
+        body = helpers.PUSHED[1][1].body
+        assert "3 个标的" in helpers.PUSHED[1][1].title
+        assert all(n in body for n in ("测试黄金", "另一个", "暂无报价"))
+        assert "895.00" in body and "896.00" in body and "897.00" in body
+        assert "暂无报价" not in body.split("─────")[0].replace("暂无报价：", "")  # 无报价行不出现
+
+    async def test_manual_send_ignores_enabled(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        engine = build_engine(store, empty_target_store, rule_store)  # 未启用简报
+
+        # 无任何报价：手动触发不发
+        result = await engine.send_briefing_now()
+        assert result["ok"] is False and result["sent"] == 0
+        assert helpers.PUSHED == []
+
+        helpers.FakeSource.quotes = [self._quote(893.0)]
+        await engine.refresh_now(target["id"])  # enabled=False：周期简报不推
+        assert helpers.PUSHED == []
+
+        result = await engine.send_briefing_now()  # 手动触发不著 enabled
+        assert result["ok"] is True and result["sent"] == 1
+        assert len(helpers.PUSHED) == 1
+        assert "手动推送" in helpers.PUSHED[0][1].body
+
+        # 手动发送重置计时器：紧接着的周期检查不会立即再推
+        helpers.FakeSource.quotes = [self._quote(894.0)]
+        await engine.refresh_now(target["id"])
+        assert len(helpers.PUSHED) == 1
 
     async def test_interval_zero_pushes_every_poll(self, store, empty_target_store, rule_store):
         target = add_target(empty_target_store)
@@ -423,34 +482,10 @@ class TestBriefingNotify:
         await engine.refresh_now(tid)  # 首推，计时开始
         helpers.FakeSource.quotes = []
         await engine.refresh_now(tid)  # 失败：不影响计时
-        engine._brief_sent_at[tid] = time.time() - 86400 - 1
+        engine._brief_sent_at = time.time() - 86400 - 1
         helpers.FakeSource.quotes = [self._quote(896.0)]
         await engine.refresh_now(tid)
         assert len(helpers.PUSHED) == 2
-
-    async def test_per_target_independent(self, store, empty_target_store, rule_store):
-        import time
-
-        t1 = add_target(empty_target_store)
-        t2 = empty_target_store.add(
-            {"name": "另一个", "source": "fake_test", "symbol": "FAKE_GOLD", "schedule": "always"}
-        )
-        engine = build_engine(store, empty_target_store, rule_store, self._config())
-
-        for _ in range(2):
-            helpers.FakeSource.quotes = [self._quote(895.0), self._quote(896.0)]
-            await engine.refresh_now(t1["id"])
-            await engine.refresh_now(t2["id"])
-        # 首推各一次，之后间隔未到不再推
-        assert len(helpers.PUSHED) == 2
-        assert {m.title.split()[1] for _, m in helpers.PUSHED} == {"测试黄金", "另一个"}
-
-        # 只回拨 t1：t1 再推、t2 不推
-        engine._brief_sent_at[t1["id"]] = time.time() - 86400 - 1
-        helpers.FakeSource.quotes = [self._quote(897.0), self._quote(898.0)]
-        await engine.refresh_now(t1["id"])
-        await engine.refresh_now(t2["id"])
-        assert len(helpers.PUSHED) == 3
 
     async def test_independent_channels(self, store, empty_target_store, rule_store):
         from app.core.notify.manager import NotificationManager

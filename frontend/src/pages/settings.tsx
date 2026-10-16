@@ -115,6 +115,17 @@ function MonitorSettings({ bundle }: { bundle: SettingsBundle }) {
         setVersion(bundle.version)
     }, [bundle])
 
+    const sendBriefingMutation = useMutation({
+        mutationFn: () => api.sendBriefing(),
+        onSuccess: (r) => {
+            if (r.ok) {
+                toast.success(`简报已发送（${r.sent}/${r.total} 个标的）`)
+            } else {
+                toast.error(r.detail ?? "发送失败：所有标的均无报价")
+            }
+        },
+        onError: (e: Error) => toast.error(`发送失败：${e.message}`),
+    })
     const saveMutation = useMutation({
         mutationFn: () =>
             api.updateSettings(
@@ -218,10 +229,20 @@ function MonitorSettings({ bundle }: { bundle: SettingsBundle }) {
                             <div>
                                 <Label>行情简报推送</Label>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                    每个标的每隔 N 天推送一次当前价，无需触发告警规则
+                                    每隔 N 天把所有标的最新价聚合为一条消息推送
                                 </p>
                             </div>
-                            <Switch checked={bnEnabled} onCheckedChange={setBnEnabled} />
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => sendBriefingMutation.mutate()}
+                                    disabled={sendBriefingMutation.isPending}
+                                >
+                                    {sendBriefingMutation.isPending ? "发送中…" : "立即发送"}
+                                </Button>
+                                <Switch checked={bnEnabled} onCheckedChange={setBnEnabled} />
+                            </div>
                         </div>
                         {bnEnabled && (
                             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -235,7 +256,7 @@ function MonitorSettings({ bundle }: { bundle: SettingsBundle }) {
                                         onChange={(e) => setBnDays(e.target.value)}
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        支持小数：0.5 = 12 小时；0 = 每次成功轮询都推。每个标的独立计时，从上次简报起算
+                                        支持小数：0.5 = 12 小时；0 = 每次成功轮询都推。全局统一计时，从上次简报起算
                                     </p>
                                 </div>
                                 <ChannelChips
@@ -250,7 +271,7 @@ function MonitorSettings({ bundle }: { bundle: SettingsBundle }) {
                                     }
                                 />
                                 <p className="text-xs text-muted-foreground sm:col-span-2">
-                                    首次成功轮询即推一次，此后按间隔计时；简报会记录到「告警历史」（rule=行情简报）。
+                                    首次成功轮询即推一次，此后按间隔计时；无报价标的汇总为一句不逐行展开；「立即发送」不看开关随时可发。简报会记录到「告警历史」（rule=行情简报）。
                                 </p>
                             </div>
                         )}

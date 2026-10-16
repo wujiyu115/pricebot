@@ -71,8 +71,13 @@ export const api = {
             { method: "POST", body: JSON.stringify(data) },
         ),
     refreshTarget: (id: string) =>
-        request<{ ok: boolean; quote: Target["_status"] extends never ? never : object | null; last_error: string | null }>(
+        request<{ ok: boolean; quote: object | null; last_error: string | null }>(
             `/targets/${id}/refresh`,
+            { method: "POST" },
+        ),
+    sendBriefing: () =>
+        request<{ ok: boolean; sent: number; total: number; detail?: string; channels?: string[] }>(
+            "/dashboard/briefing/send",
             { method: "POST" },
         ),
 

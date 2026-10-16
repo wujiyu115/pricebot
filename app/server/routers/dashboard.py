@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from ...core.sources import list_source_names
 from ..deps import get_services, to_thread
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+
+
+@router.post("/briefing/send")
+async def send_briefing(services=Depends(get_services)):
+    """手动立即发一条聚合简报（所有标的最新价合并为一条推送）。"""
+    try:
+        result = await services.run_bg(services.engine.send_briefing_now())
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return result
 
 
 @router.get("")

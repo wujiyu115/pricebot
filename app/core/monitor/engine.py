@@ -50,7 +50,7 @@ class MonitorEngine:
         self._last_poll: dict[str, float] = {}
         self._status: dict[str, dict[str, Any]] = {}  # target_id -> runtime status
         self._error_notified_at: dict[str, float] = {}  # target_id -> 上次源失效推送时间
-        self._brief_sent_at: dict[str, float] = {}  # target_id -> 上次行情简报推送时间
+        self._brief_sent_at: float = 0.0  # 上次聚合简报推送时间（全局）
         self._lock = asyncio.Lock()
         self._stopping = asyncio.Event()
 
@@ -150,16 +150,16 @@ class MonitorEngine:
         now = time.time()
         self._store.add_tick(target_id, now, quote.last, quote.bid, quote.ask)
         self._set_status(target_id, error=None, quote=quote)
-        await self._maybe_send_briefing(target, quote, now)
+        await self._maybe_send_briefing(now)
         await self._evaluate_rules(target, quote, now)
 
-    async def _maybe_send_briefing(self, target: dict[str, Any], quote: Quote, now: float) -> None:
-        """行情简报：每个标的按时间间隔（N 天）推送一次当前价，无需触发告警规则。
+    async def _maybe_send_briefing(self, now: float) -> None:
+        """聚合行情简报：全局单一计时，到点后把**所有**标的最新价合并成一条推送。
 
         配置 monitor.briefing_notify：enabled / interval_days / channels
         （空 = 所有启用渠道）。interval_days 支持小数（0.5 = 12 小时）；
-        0 是合法值（每次成功轮询都推），禁用 ``or`` 短路取默认。
-        首次成功轮询即推一次，此后按间隔计时；每个标的独立计时。
+        0 是合法值（任一标的成功轮询即推一条聚合简报），禁用 ``or`` 短路取默认。
+        首次成功轮询即推一次；此后按全局间隔计时（不区分标的）。
         """
         cfg = (self._get_config() or {}).get("briefing_notify") or {}
         if not cfg.get("enabled"):
@@ -169,46 +169,91 @@ class MonitorEngine:
             interval_days = max(0.0, float(raw_days))  # type: ignore[arg-type]
         except (TypeError, ValueError):
             interval_days = 1.0
-        target_id = target["id"]
-        last = self._brief_sent_at.get(target_id, 0.0)
-        if now - last < interval_days * 86400:
+        if now - self._brief_sent_at < interval_days * 86400:
             return
-        self._brief_sent_at[target_id] = now
+        await self._send_aggregated_briefing(now, interval_days=interval_days, cfg=cfg)
 
-        name = target.get("name") or quote.name or quote.symbol
-        unit = quote.unit or ""
-        change_str = ""
-        assert quote.last is not None  # 调用方已检查 last 非 None
-        if quote.prev_close:
-            pct = (quote.last - quote.prev_close) / quote.prev_close * 100
-            change_str = f"（较昨收 {pct:+.2f}%）"
+    async def send_briefing_now(self) -> dict:
+        """手动立即发一条聚合简报（不著 enabled 开关，计时器一并重置）。"""
+        cfg = (self._get_config() or {}).get("briefing_notify") or {}
+        raw_days = cfg.get("interval_days")
+        try:
+            interval_days = max(0.0, float(raw_days))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            interval_days = 1.0
+        return await self._send_aggregated_briefing(
+            time.time(), interval_days=interval_days, cfg=cfg, manual=True
+        )
+
+    async def _send_aggregated_briefing(
+        self, now: float, interval_days: float, cfg: dict[str, Any], manual: bool = False
+    ) -> dict:
+        rows: list[str] = []
+        quoted = 0
+        targets = self._targets.list()
+        for target in targets:
+            entry = self._status.get(target["id"]) or {}
+            quote: Quote | None = entry.get("quote")
+            if quote is None or quote.last is None:
+                continue  # 无报价标的不逐条列出（非交易时段会很吵），尾部汇总一句
+            quoted += 1
+            name = target.get("name") or quote.name or quote.symbol
+            unit = quote.unit or ""
+            change_str = ""
+            if quote.prev_close:
+                pct = (quote.last - quote.prev_close) / quote.prev_close * 100
+                change_str = f"（较昨收 {pct:+.2f}%）"
+            rows.append(f"{name}：{quote.last:.2f} {unit}{change_str}".rstrip())
+
+        if not rows:
+            logger.info("BRIEFING skipped: no target has a quote yet")
+            return {"ok": False, "sent": 0, "detail": "所有标的均无报价，无需简报"}
+
+        total = len(targets)
+        body_lines = list(rows)
+        if quoted < total:
+            body_lines.append(f"（另有 {total - quoted} 个标的暂无报价）")
+        if manual:
+            interval_str = "手动推送"
+        elif interval_days:
+            interval_str = f"每 {interval_days:g} 天一次"
+        else:
+            interval_str = "每次轮询"
+        body_lines += [
+            "─────",
+            f"简报间隔：{interval_str}",
+            f"时间：{datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')}",
+        ]
         channels = [str(c).strip() for c in (cfg.get("channels") or []) if str(c).strip()] or None
-        interval_str = f"每 {interval_days:g} 天一次" if interval_days else "每次轮询"
         message = Message(
-            title=f"📊 {name} {quote.last:.2f}{unit}{change_str}",
-            body=(
-                f"{name}：{quote.last:.2f} {unit}{change_str}\n"
-                + (f"买一 {quote.bid:.2f} / 卖一 {quote.ask:.2f}\n" if quote.bid and quote.ask else "")
-                + f"简报间隔：{interval_str}\n"
-                + f"时间：{datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')}"
-            ),
+            title=f"📊 价格简报 · {quoted} 个标的",
+            body="\n".join(body_lines),
             group="PriceBot",
             severity="info",
         )
         results = await self._notifier.send(message, channels=channels)
+        self._brief_sent_at = now
+        summary = " / ".join(rows)
         self._store.add_alert(
             ts=now,
             rule_id="briefing",
-            target_id=target_id,
+            target_id="",
             rule_name="行情简报",
-            price=quote.last,
-            message=f"{name} {quote.last:.2f}{unit}{change_str}",
+            price=None,
+            message=summary,
             channels=channels or [r.channel for r in results],
             results=[{"channel": r.channel, "ok": r.ok, "detail": r.detail} for r in results],
         )
         logger.info(
-            f"BRIEFING {name} {quote.last:.2f} (interval {interval_str}) -> {len(results)} channel(s)"
+            f"BRIEFING aggregated {quoted}/{total} targets ({interval_str}) -> {len(results)} channel(s)"
         )
+        return {
+            "ok": all(r.ok for r in results) if results else False,
+            "sent": quoted,
+            "total": total,
+            "channels": [r.channel for r in results],
+            "results": [{"channel": r.channel, "ok": r.ok, "detail": r.detail} for r in results],
+        }
 
     async def _handle_poll_failure(
         self, target: dict[str, Any], error: str, prev_quote: Quote | None = None
