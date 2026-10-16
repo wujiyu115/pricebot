@@ -58,9 +58,7 @@ class TestWeCom:
             return httpx.Response(200, json={"errcode": 93000, "errmsg": "invalid webhook url"})
 
         mock_transport(handler)
-        result = await WeComNotifier().send(
-            Message(title="t", body="b"), {"webhook_url": _URL}
-        )
+        result = await WeComNotifier().send(Message(title="t", body="b"), {"webhook_url": _URL})
         assert result.ok is False
         assert "93000" in result.detail
         assert "invalid webhook url" in result.detail
@@ -80,9 +78,7 @@ class TestWeCom:
 
         requests = mock_transport(handler)
         long_body = "很长的价格提醒" * 200  # ~1200 chars × 3 bytes > 4000B
-        result = await WeComNotifier().send(
-            Message(title="t", body=long_body), {"webhook_url": _URL}
-        )
+        result = await WeComNotifier().send(Message(title="t", body=long_body), {"webhook_url": _URL})
         assert result.ok is True
         body = json.loads(requests[0].content)
         assert len(body["markdown"]["content"].encode("utf-8")) <= 4000

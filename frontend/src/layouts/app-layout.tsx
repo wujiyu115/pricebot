@@ -16,15 +16,15 @@ export function AppLayout() {
     return (
         <div className="min-h-screen bg-background">
             <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-                <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
+                <div className="mx-auto flex max-w-6xl flex-col px-4 py-2 sm:h-14 sm:flex-row sm:items-center sm:gap-6 sm:py-0">
                     <div className="flex items-center gap-2 font-semibold">
-                        <Radio className="size-5 text-amber-600" />
-                        <span>PriceBot</span>
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-normal text-amber-800">
+                        <Radio className="size-5 shrink-0 text-amber-600" />
+                        <span className="whitespace-nowrap">PriceBot</span>
+                        <span className="whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-xs font-normal text-amber-800">
                             金价监控
                         </span>
                     </div>
-                    <nav className="flex items-center gap-1">
+                    <nav className="-mx-1 mt-2 flex items-center gap-1 overflow-x-auto pb-0.5 sm:mt-0 sm:overflow-visible">
                         {NAV.map((item) => (
                             <NavLink
                                 key={item.to}
@@ -32,7 +32,7 @@ export function AppLayout() {
                                 end={item.end}
                                 className={({ isActive }) =>
                                     cn(
-                                        "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+                                        "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors",
                                         isActive
                                             ? "bg-accent font-medium text-accent-foreground"
                                             : "text-muted-foreground hover:bg-accent/60",

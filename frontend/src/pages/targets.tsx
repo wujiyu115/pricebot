@@ -250,7 +250,8 @@ export function TargetsPage() {
 
             <Card>
                 <CardContent className="p-0">
-                    <Table>
+                    <div className="overflow-x-auto">
+                        <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>名称</TableHead>
@@ -346,7 +347,8 @@ export function TargetsPage() {
                                 </TableRow>
                             ))}
                         </TableBody>
-                    </Table>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
 

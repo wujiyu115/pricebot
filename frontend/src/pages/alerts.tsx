@@ -47,8 +47,8 @@ export function AlertsPage() {
                     <History className="size-5" />
                     告警历史
                 </h1>
-                <div className="flex items-end gap-3">
-                    <div className="space-y-1">
+                <div className="flex flex-wrap items-end gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
                         <span className="text-xs text-muted-foreground">标的筛选</span>
                         <Select value={targetId} onValueChange={setTargetId}>
                             <SelectTrigger className="w-44">
@@ -96,7 +96,8 @@ export function AlertsPage() {
 
             <Card>
                 <CardContent className="p-0">
-                    <Table>
+                    <div className="overflow-x-auto">
+                        <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>时间</TableHead>
@@ -157,7 +158,8 @@ export function AlertsPage() {
                                 )
                             })}
                         </TableBody>
-                    </Table>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
 
