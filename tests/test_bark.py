@@ -1,6 +1,8 @@
-"""Bark 推送单测（MockTransport，验证 URL 构造与多设备分发）。"""
+"""Bark 推送单测（MockTransport，验证 POST /push 载荷构造与多设备分发）。"""
 
 from __future__ import annotations
+
+import json
 
 import httpx
 import pytest
@@ -48,7 +50,7 @@ def success_handler(request: httpx.Request) -> httpx.Response:
 
 
 class TestBark:
-    async def test_url_contains_all_params(self, install_bark_transport):
+    async def test_post_payload_contains_all_params(self, install_bark_transport):
         requests = install_bark_transport(success_handler)
         result = await BarkNotifier().send(
             Message(title="金价提醒", body="上金所黄金9999 现价 900.50", url="https://example.com"),
@@ -57,13 +59,30 @@ class TestBark:
         assert result.ok is True
         assert len(requests) == 2  # 两个设备各一条
 
-        url = str(requests[0].url)
-        assert "https://api.day.app/key1/" in url
-        assert "group=Gold" in url
-        assert "sound=minuet" in url
-        assert "level=timeSensitive" in url
-        assert "%E9%87%91%E4%BB%B7%E6%8F%90%E9%86%92" in url  # 金价提醒 URL 编码
-        assert "/key2/" in str(requests[1].url)
+        # POST /push + JSON 体（长正文不再走 URL 路径，聚合简报不炸）
+        req0 = requests[0]
+        assert req0.method == "POST"
+        assert str(req0.url) == "https://api.day.app/push"
+        payload = json.loads(req0.content.decode("utf-8"))
+        assert payload["device_key"] == "key1"
+        assert payload["title"] == "金价提醒"
+        assert payload["body"] == "上金所黄金9999 现价 900.50"
+        assert payload["group"] == "Gold"
+        assert payload["sound"] == "minuet"
+        assert payload["level"] == "timeSensitive"
+        assert payload["url"] == "https://example.com"
+        assert json.loads(requests[1].content.decode("utf-8"))["device_key"] == "key2"
+
+    async def test_long_multiline_body_ok(self, install_bark_transport):
+        """聚合简报式长多行正文（含分隔线/换行）必须能发出去。"""
+        requests = install_bark_transport(success_handler)
+        body = "\n".join(
+            [f"标的{i}：{100 + i}.00 元（较昨收 +0.{i}%）" for i in range(1, 11)]
+            + ["─────", "简报间隔：每 1 天一次", "时间：2026-12-31 23:59:59"]
+        )
+        result = await BarkNotifier().send(Message(title="📊 价格简报 · 10 个标的", body=body), CONFIG)
+        assert result.ok is True
+        assert len(requests) == 2
 
     async def test_no_device_keys_fails(self, install_bark_transport):
         requests = install_bark_transport(success_handler)
@@ -86,4 +105,4 @@ class TestBark:
         requests = install_bark_transport(success_handler)
         config = dict(CONFIG, server="https://bark.selfhost.cn/")
         await BarkNotifier().send(Message(title="t", body="b"), config)
-        assert str(requests[0].url).startswith("https://bark.selfhost.cn/key1/")
+        assert str(requests[0].url) == "https://bark.selfhost.cn/push"

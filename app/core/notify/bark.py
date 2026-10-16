@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 from typing import Any, ClassVar
-from urllib.parse import quote
 
 import httpx
 
@@ -49,15 +48,29 @@ class BarkNotifier(Notifier):
         if message.url:
             params["url"] = message.url
 
+        payload: dict[str, str] = {
+            "device_key": "",  # 每个设备单独填
+            "title": message.title,
+            "body": message.body,
+            "group": group,
+        }
+        if sound:
+            payload["sound"] = sound
+        if icon:
+            payload["icon"] = icon
+        if level:
+            payload["level"] = level
+        if message.url:
+            payload["url"] = message.url
+
+        # Bark 官方 POST JSON 接口：支持任意长度正文（GET 路径式 API 会把长多行
+        # 正文编进 URL，聚合简报等长消息直接 404，2026-12 实测踩坑）
         failures: list[str] = []
         async with httpx.AsyncClient(timeout=10.0) as client:
             for key in keys:
-                url = (
-                    f"{server}/{quote(key)}/{quote(message.title)}/{quote(message.body)}"
-                    f"?{'&'.join(f'{k}={quote(v)}' for k, v in params.items())}"
-                )
+                payload["device_key"] = key
                 try:
-                    resp = await client.get(url)
+                    resp = await client.post(f"{server}/push", json=payload)
                     ok = resp.status_code == 200 and resp.json().get("code") == 200
                     if not ok:
                         failures.append(f"{key[:8]}…: HTTP {resp.status_code} {resp.text[:80]}")
