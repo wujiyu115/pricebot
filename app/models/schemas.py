@@ -27,6 +27,14 @@ class TargetPatch(BaseModel):
     extra: dict[str, Any] | None = None
 
 
+class VerifyIn(BaseModel):
+    """标的保存前的试抓验证入参。"""
+
+    source: str = Field(min_length=1)
+    symbol: str = Field(min_length=1)
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
 class RuleIn(BaseModel):
     target_id: str
     name: str = Field(min_length=1, max_length=64)

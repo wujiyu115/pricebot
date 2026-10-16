@@ -242,6 +242,245 @@ class TestLiveView:
         assert by_name["停用标的"]["quote"] is None
 
 
+class TestSourceErrorNotify:
+    """源失效推送：连续失败阈值 + 独立重复间隔 + 独立渠道。"""
+
+    @staticmethod
+    def _config(**overrides) -> dict:
+        cfg = {
+            "interval_seconds": 30,
+            "source_error_notify": {
+                "enabled": True,
+                "min_failures": 2,
+                "repeat_minutes": 30,
+                "channels": ["fake_push"],
+            },
+        }
+        cfg["source_error_notify"].update(overrides)
+        return cfg
+
+    async def test_fires_after_consecutive_failures(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        helpers.FakeSource.quotes = []  # fetch 抛 SourceError
+        engine = build_engine(store, empty_target_store, rule_store, self._config())
+
+        await engine.refresh_now(target["id"])  # 失败 1：未达阈值，不推
+        assert helpers.PUSHED == []
+        await engine.refresh_now(target["id"])  # 失败 2：达标，推送
+        assert len(helpers.PUSHED) == 1
+        title, msg = helpers.PUSHED[0]
+        assert title == "fake_push"
+        assert "数据源失效" in msg.title
+        assert "测试黄金" in msg.title
+        assert "连续 2 次获取失败" in msg.body
+
+        alerts = store.list_alerts(limit=10)
+        assert len(alerts) == 1
+        assert alerts[0]["rule_id"] == "source_error"
+        assert alerts[0]["rule_name"] == "源失效"
+        assert alerts[0]["price"] is None
+
+    async def test_repeat_interval_throttles(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        helpers.FakeSource.quotes = []
+        engine = build_engine(
+            store, empty_target_store, rule_store, self._config(min_failures=1, repeat_minutes=30)
+        )
+
+        await engine.refresh_now(target["id"])
+        await engine.refresh_now(target["id"])  # 间隔内：节流
+        await engine.refresh_now(target["id"])
+        assert len(helpers.PUSHED) == 1
+
+    async def test_repeat_zero_pushes_every_failure(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        helpers.FakeSource.quotes = []
+        engine = build_engine(
+            store, empty_target_store, rule_store, self._config(min_failures=1, repeat_minutes=0)
+        )
+
+        await engine.refresh_now(target["id"])
+        await engine.refresh_now(target["id"])
+        assert len(helpers.PUSHED) == 2  # repeat=0 不节流
+
+    async def test_recovery_resets_counter_and_throttle(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        engine = build_engine(store, empty_target_store, rule_store, self._config())
+
+        helpers.FakeSource.quotes = []
+        await engine.refresh_now(target["id"])
+        await engine.refresh_now(target["id"])  # 推送 1 次
+        assert len(helpers.PUSHED) == 1
+
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=895.0)]
+        await engine.refresh_now(target["id"])  # 恢复：error_count 归零、节流重置
+        assert engine.get_live_view()[0]["error_count"] == 0
+
+        helpers.FakeSource.quotes = []
+        await engine.refresh_now(target["id"])  # 重新失败 1 次：需重新累计
+        assert len(helpers.PUSHED) == 1
+        await engine.refresh_now(target["id"])  # 失败 2 次：重新达标，再推
+        assert len(helpers.PUSHED) == 2
+
+    async def test_independent_channels(self, store, empty_target_store, rule_store):
+        """源失效推送只走配置的渠道，不影响规则推送渠道。"""
+        target = add_target(empty_target_store)
+        # fake_push2 未在 notify 配置中启用 -> send 返回 disabled
+        from app.core.notify.manager import NotificationManager
+
+        config = self._config(channels=["fake_push", "fake_push2"])
+        notifier = NotificationManager(
+            lambda: {"fake_push": {"enabled": True}, "fake_push2": {"enabled": False}}
+        )
+        engine = MonitorEngine(
+            target_store=empty_target_store,
+            rule_store=rule_store,
+            store=store,
+            notifier=notifier,
+            monitor_config_getter=lambda: config,
+        )
+        helpers.FakeSource.quotes = []
+        await engine.refresh_now(target["id"])
+        await engine.refresh_now(target["id"])
+        assert len(helpers.PUSHED) == 1  # 只有 fake_push 成功
+        alerts = store.list_alerts(limit=10)
+        assert alerts[0]["channels"] == ["fake_push", "fake_push2"]
+
+    async def test_disabled_by_default(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        helpers.FakeSource.quotes = []
+        engine = build_engine(store, empty_target_store, rule_store)  # 无该配置
+        for _ in range(5):
+            await engine.refresh_now(target["id"])
+        assert helpers.PUSHED == []
+        assert store.list_alerts(limit=10) == []
+
+
+class TestBriefingNotify:
+    """行情简报：每个标的按时间间隔（N 天）推一次当前价，无需告警规则。"""
+
+    @staticmethod
+    def _config(**overrides) -> dict:
+        cfg = {
+            "interval_seconds": 30,
+            "briefing_notify": {"enabled": True, "interval_days": 1, "channels": ["fake_push"]},
+        }
+        cfg["briefing_notify"].update(overrides)
+        return cfg
+
+    @staticmethod
+    def _quote(price: float) -> helpers.Quote:
+        return helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=price, prev_close=900.0, unit="元/克")
+
+    async def test_first_success_then_interval(self, store, empty_target_store, rule_store):
+        import time
+
+        target = add_target(empty_target_store)
+        engine = build_engine(store, empty_target_store, rule_store, self._config())
+        tid = target["id"]
+
+        helpers.FakeSource.quotes = [self._quote(897.0)]
+        await engine.refresh_now(tid)  # 首次成功即推
+        assert len(helpers.PUSHED) == 1
+        msg = helpers.PUSHED[0][1]
+        assert "测试黄金" in msg.title
+        assert "897.00" in msg.title
+        assert "较昨收 -0.33%" in msg.title
+        assert "每 1 天一次" in msg.body
+        alerts = store.list_alerts(limit=10)
+        assert alerts[0]["rule_id"] == "briefing" and alerts[0]["price"] == 897.0
+
+        for _ in range(3):
+            helpers.FakeSource.quotes = [self._quote(898.0)]
+            await engine.refresh_now(tid)  # 间隔未到：不推
+        assert len(helpers.PUSHED) == 1
+
+        # 时间回拨：上次推送时间改为 1 天前 -> 再推
+        engine._brief_sent_at[tid] = time.time() - 86400 - 1
+        helpers.FakeSource.quotes = [self._quote(900.0)]
+        await engine.refresh_now(tid)
+        assert len(helpers.PUSHED) == 2
+        assert store.list_alerts(limit=1)[0]["price"] == 900.0
+
+    async def test_interval_zero_pushes_every_poll(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        engine = build_engine(store, empty_target_store, rule_store, self._config(interval_days=0))
+
+        for i in range(3):
+            helpers.FakeSource.quotes = [self._quote(895.0 + i)]
+            await engine.refresh_now(target["id"])
+        assert len(helpers.PUSHED) == 3  # 0 = 每次成功轮询都推
+        assert "每次轮询" in helpers.PUSHED[0][1].body
+
+    async def test_failures_do_not_reset_timer(self, store, empty_target_store, rule_store):
+        import time
+
+        target = add_target(empty_target_store)
+        engine = build_engine(store, empty_target_store, rule_store, self._config())
+        tid = target["id"]
+
+        helpers.FakeSource.quotes = [self._quote(895.0)]
+        await engine.refresh_now(tid)  # 首推，计时开始
+        helpers.FakeSource.quotes = []
+        await engine.refresh_now(tid)  # 失败：不影响计时
+        engine._brief_sent_at[tid] = time.time() - 86400 - 1
+        helpers.FakeSource.quotes = [self._quote(896.0)]
+        await engine.refresh_now(tid)
+        assert len(helpers.PUSHED) == 2
+
+    async def test_per_target_independent(self, store, empty_target_store, rule_store):
+        import time
+
+        t1 = add_target(empty_target_store)
+        t2 = empty_target_store.add(
+            {"name": "另一个", "source": "fake_test", "symbol": "FAKE_GOLD", "schedule": "always"}
+        )
+        engine = build_engine(store, empty_target_store, rule_store, self._config())
+
+        for _ in range(2):
+            helpers.FakeSource.quotes = [self._quote(895.0), self._quote(896.0)]
+            await engine.refresh_now(t1["id"])
+            await engine.refresh_now(t2["id"])
+        # 首推各一次，之后间隔未到不再推
+        assert len(helpers.PUSHED) == 2
+        assert {m.title.split()[1] for _, m in helpers.PUSHED} == {"测试黄金", "另一个"}
+
+        # 只回拨 t1：t1 再推、t2 不推
+        engine._brief_sent_at[t1["id"]] = time.time() - 86400 - 1
+        helpers.FakeSource.quotes = [self._quote(897.0), self._quote(898.0)]
+        await engine.refresh_now(t1["id"])
+        await engine.refresh_now(t2["id"])
+        assert len(helpers.PUSHED) == 3
+
+    async def test_independent_channels(self, store, empty_target_store, rule_store):
+        from app.core.notify.manager import NotificationManager
+
+        config = self._config(channels=["fake_push", "other"])
+        notifier = NotificationManager(lambda: {"fake_push": {"enabled": True}})
+        engine = MonitorEngine(
+            target_store=empty_target_store,
+            rule_store=rule_store,
+            store=store,
+            notifier=notifier,
+            monitor_config_getter=lambda: config,
+        )
+        target = add_target(empty_target_store)
+        helpers.FakeSource.quotes = [self._quote(895.0)]
+        await engine.refresh_now(target["id"])
+        assert len(helpers.PUSHED) == 1  # 只走 fake_push
+        alerts = store.list_alerts(limit=10)
+        assert alerts[0]["channels"] == ["fake_push", "other"]
+
+    async def test_disabled_by_default(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        engine = build_engine(store, empty_target_store, rule_store)  # 无该配置
+        for i in range(5):
+            helpers.FakeSource.quotes = [self._quote(895.0 + i)]
+            await engine.refresh_now(target["id"])
+        assert helpers.PUSHED == []
+        assert store.list_alerts(limit=10) == []
+
+
 class TestTickScheduling:
     async def test_disabled_target_not_polled(self, store, empty_target_store, rule_store):
         target = add_target(empty_target_store)

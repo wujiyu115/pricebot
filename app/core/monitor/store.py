@@ -142,6 +142,14 @@ class Store:
                 results = json.loads(r["results"] or "[]")
             except ValueError:
                 results = []
+            # channels 写入侧是 json.dumps（见 add_alert）；兼容历史逗号分隔行
+            raw_channels = r["channels"] or ""
+            try:
+                channels = json.loads(raw_channels)
+                if not isinstance(channels, list):
+                    channels = [str(channels)]
+            except ValueError:
+                channels = [c.strip() for c in raw_channels.split(",") if c.strip()]
             out.append(
                 {
                     "id": r["id"],
@@ -151,7 +159,7 @@ class Store:
                     "rule_name": r["rule_name"],
                     "price": r["price"],
                     "message": r["message"],
-                    "channels": (r["channels"] or "").split(",") if r["channels"] else [],
+                    "channels": channels,
                     "results": results,
                 }
             )

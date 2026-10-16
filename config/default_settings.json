@@ -3,7 +3,18 @@
   "monitor": {
     "interval_seconds": 30,
     "source_timeout_seconds": 10,
-    "history_retention_days": 90
+    "history_retention_days": 90,
+    "source_error_notify": {
+      "enabled": false,
+      "min_failures": 3,
+      "repeat_minutes": 30,
+      "channels": []
+    },
+    "briefing_notify": {
+      "enabled": false,
+      "interval_days": 1,
+      "channels": []
+    }
   },
   "notify": {
     "bark": {

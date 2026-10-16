@@ -21,7 +21,7 @@ export function AppLayout() {
                         <Radio className="size-5 shrink-0 text-amber-600" />
                         <span className="whitespace-nowrap">PriceBot</span>
                         <span className="whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-xs font-normal text-amber-800">
-                            金价监控
+                            价格监控
                         </span>
                     </div>
                     <nav className="-mx-1 mt-2 flex items-center gap-1 overflow-x-auto pb-0.5 sm:mt-0 sm:overflow-visible">

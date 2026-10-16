@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Plus, RefreshCw, Trash2 } from "lucide-react"
+import { Loader2, Plus, RefreshCw, SearchCheck, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api/client"
@@ -45,6 +45,9 @@ function TargetDialog({
     const [ghUrl, setGhUrl] = useState("")
     const [ghJsonPath, setGhJsonPath] = useState("")
     const [ghRegex, setGhRegex] = useState("")
+    const [verifyResult, setVerifyResult] = useState<
+        { ok: true; quote: { name: string; last: number; prev_close: number | null; unit: string; time: string } } | { ok: false; error: string } | null
+    >(null)
 
     // 打开时回填
     useEffect(() => {
@@ -61,6 +64,20 @@ function TargetDialog({
     }, [open, editing])
 
     const sourceMeta = sources.find((s) => s.name === source)
+
+    const verifyMutation = useMutation({
+        mutationFn: async () => {
+            const extra: Record<string, string> = {}
+            if (source === "generic_http") {
+                extra.url = ghUrl
+                if (ghJsonPath) extra.json_path = ghJsonPath
+                if (ghRegex) extra.regex = ghRegex
+            }
+            return api.verifySymbol({ source, symbol: symbol.trim(), extra })
+        },
+        onSuccess: (r) => setVerifyResult({ ok: true, quote: r.quote }),
+        onError: (err) => setVerifyResult({ ok: false, error: err.message }),
+    })
 
     const mutation = useMutation({
         mutationFn: async () => {
@@ -110,12 +127,60 @@ function TargetDialog({
                         </Select>
                     </div>
                     <div className="space-y-1.5">
-                        <Label>代码</Label>
+                        <div className="flex items-center justify-between">
+                            <Label>代码</Label>
+                            <button
+                                type="button"
+                                className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                                disabled={!source || !symbol.trim() || verifyMutation.isPending}
+                                onClick={() => {
+                                    setVerifyResult(null)
+                                    verifyMutation.mutate()
+                                }}
+                            >
+                                {verifyMutation.isPending ? (
+                                    <Loader2 className="size-3.5 animate-spin" />
+                                ) : (
+                                    <SearchCheck className="size-3.5" />
+                                )}
+                                {verifyMutation.isPending ? "查询中…" : "验证代码"}
+                            </button>
+                        </div>
                         <Input
                             value={symbol}
-                            onChange={(e) => setSymbol(e.target.value)}
+                            onChange={(e) => {
+                                setSymbol(e.target.value)
+                                setVerifyResult(null)
+                            }}
                             placeholder="如: SGE_AU9999"
                         />
+                        {verifyResult && (
+                            <div
+                                className={`rounded-md px-2.5 py-1.5 text-xs ${
+                                    verifyResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                                }`}
+                            >
+                                {verifyResult.ok ? (
+                                    <>
+                                        ✓ 可用：{verifyResult.quote.name || symbol}
+                                        最新价{" "}
+                                        <span className="font-semibold tabular-nums">
+                                            {verifyResult.quote.last.toFixed(2)}
+                                        </span>
+                                        {verifyResult.quote.unit && (
+                                            <span className="ml-0.5">{verifyResult.quote.unit}</span>
+                                        )}
+                                        {verifyResult.quote.prev_close != null && (
+                                            <span className="ml-1 opacity-80">
+                                                (昨收 {verifyResult.quote.prev_close.toFixed(2)})
+                                            </span>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>✗ {verifyResult.error}</>
+                                )}
+                            </div>
+                        )}
                         {sourceMeta && Object.keys(sourceMeta.known_symbols).length > 0 && (
                             <div className="flex flex-wrap gap-1.5 pt-1">
                                 {Object.entries(sourceMeta.known_symbols).map(([code, label]) => (

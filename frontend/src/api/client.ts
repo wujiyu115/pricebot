@@ -65,6 +65,11 @@ export const api = {
         body: JSON.stringify(patch),
     }).then((r) => r.target),
     deleteTarget: (id: string) => request<{ ok: boolean }>(`/targets/${id}`, { method: "DELETE" }),
+    verifySymbol: (data: { source: string; symbol: string; extra?: Record<string, unknown> }) =>
+        request<{ ok: boolean; quote: { name: string; last: number; prev_close: number | null; unit: string; time: string } }>(
+            "/targets/verify",
+            { method: "POST", body: JSON.stringify(data) },
+        ),
     refreshTarget: (id: string) =>
         request<{ ok: boolean; quote: Target["_status"] extends never ? never : object | null; last_error: string | null }>(
             `/targets/${id}/refresh`,

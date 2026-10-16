@@ -49,6 +49,8 @@ class MonitorEngine:
         self._rule_states: dict[str, RuleState] = defaultdict(RuleState)
         self._last_poll: dict[str, float] = {}
         self._status: dict[str, dict[str, Any]] = {}  # target_id -> runtime status
+        self._error_notified_at: dict[str, float] = {}  # target_id -> 上次源失效推送时间
+        self._brief_sent_at: dict[str, float] = {}  # target_id -> 上次行情简报推送时间
         self._lock = asyncio.Lock()
         self._stopping = asyncio.Event()
 
@@ -129,7 +131,7 @@ class MonitorEngine:
         try:
             source_cls = get_source_class(source_name)
         except KeyError as exc:
-            self._set_status(target_id, error=str(exc), quote=None)
+            await self._handle_poll_failure(target, str(exc))
             return
 
         try:
@@ -138,17 +140,140 @@ class MonitorEngine:
         except (SourceError, Exception) as exc:
             logger.warning(f"poll {source_name}:{symbol} failed: {exc}")
             prev = self._status.get(target_id) or {}
-            self._set_status(target_id, error=str(exc), quote=prev.get("quote"))
+            await self._handle_poll_failure(target, str(exc), prev_quote=prev.get("quote"))
             return
 
         if quote.last is None:
-            self._set_status(target_id, error="source returned no price", quote=None)
+            await self._handle_poll_failure(target, "source returned no price")
             return
 
         now = time.time()
         self._store.add_tick(target_id, now, quote.last, quote.bid, quote.ask)
         self._set_status(target_id, error=None, quote=quote)
+        await self._maybe_send_briefing(target, quote, now)
         await self._evaluate_rules(target, quote, now)
+
+    async def _maybe_send_briefing(self, target: dict[str, Any], quote: Quote, now: float) -> None:
+        """行情简报：每个标的按时间间隔（N 天）推送一次当前价，无需触发告警规则。
+
+        配置 monitor.briefing_notify：enabled / interval_days / channels
+        （空 = 所有启用渠道）。interval_days 支持小数（0.5 = 12 小时）；
+        0 是合法值（每次成功轮询都推），禁用 ``or`` 短路取默认。
+        首次成功轮询即推一次，此后按间隔计时；每个标的独立计时。
+        """
+        cfg = (self._get_config() or {}).get("briefing_notify") or {}
+        if not cfg.get("enabled"):
+            return
+        raw_days = cfg.get("interval_days")
+        try:
+            interval_days = max(0.0, float(raw_days))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            interval_days = 1.0
+        target_id = target["id"]
+        last = self._brief_sent_at.get(target_id, 0.0)
+        if now - last < interval_days * 86400:
+            return
+        self._brief_sent_at[target_id] = now
+
+        name = target.get("name") or quote.name or quote.symbol
+        unit = quote.unit or ""
+        change_str = ""
+        assert quote.last is not None  # 调用方已检查 last 非 None
+        if quote.prev_close:
+            pct = (quote.last - quote.prev_close) / quote.prev_close * 100
+            change_str = f"（较昨收 {pct:+.2f}%）"
+        channels = [str(c).strip() for c in (cfg.get("channels") or []) if str(c).strip()] or None
+        interval_str = f"每 {interval_days:g} 天一次" if interval_days else "每次轮询"
+        message = Message(
+            title=f"📊 {name} {quote.last:.2f}{unit}{change_str}",
+            body=(
+                f"{name}：{quote.last:.2f} {unit}{change_str}\n"
+                + (f"买一 {quote.bid:.2f} / 卖一 {quote.ask:.2f}\n" if quote.bid and quote.ask else "")
+                + f"简报间隔：{interval_str}\n"
+                + f"时间：{datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')}"
+            ),
+            group="PriceBot",
+            severity="info",
+        )
+        results = await self._notifier.send(message, channels=channels)
+        self._store.add_alert(
+            ts=now,
+            rule_id="briefing",
+            target_id=target_id,
+            rule_name="行情简报",
+            price=quote.last,
+            message=f"{name} {quote.last:.2f}{unit}{change_str}",
+            channels=channels or [r.channel for r in results],
+            results=[{"channel": r.channel, "ok": r.ok, "detail": r.detail} for r in results],
+        )
+        logger.info(
+            f"BRIEFING {name} {quote.last:.2f} (interval {interval_str}) -> {len(results)} channel(s)"
+        )
+
+    async def _handle_poll_failure(
+        self, target: dict[str, Any], error: str, prev_quote: Quote | None = None
+    ) -> None:
+        """记录失败状态，并按配置推送源失效告警。"""
+        self._set_status(target["id"], error=error, quote=prev_quote)
+        await self._maybe_notify_source_error(target, error)
+
+    async def _maybe_notify_source_error(self, target: dict[str, Any], error: str) -> None:
+        """源失效推送：连续失败达阈值后告警，重复推送按独立间隔节流。
+
+        配置 monitor.source_error_notify：enabled / min_failures /
+        repeat_minutes / channels（空 = 所有启用渠道）。注意 0 是合法值
+        （repeat_minutes=0 表示每次失败都推），禁用 ``or`` 短路取默认。
+        """
+        cfg = (self._get_config() or {}).get("source_error_notify") or {}
+        if not cfg.get("enabled"):
+            return
+        status = self._status.get(target["id"]) or {}
+        error_count = int(status.get("error_count") or 0)
+        raw_min = cfg.get("min_failures")
+        try:
+            min_failures = max(1, int(raw_min))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            min_failures = 3
+        if error_count < min_failures:
+            return
+
+        now = time.time()
+        raw_repeat = cfg.get("repeat_minutes")
+        try:
+            repeat_minutes = max(0.0, float(raw_repeat))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            repeat_minutes = 30.0
+        last = self._error_notified_at.get(target["id"])
+        if last is not None and now - last < repeat_minutes * 60:
+            return
+        self._error_notified_at[target["id"]] = now
+
+        name = target.get("name") or target.get("symbol") or target["id"]
+        channels = [str(c).strip() for c in (cfg.get("channels") or []) if str(c).strip()] or None
+        message = Message(
+            title=f"⚠️ 数据源失效：{name}",
+            body=(
+                f"{target.get('source')}:{target.get('symbol')} 连续 {error_count} 次获取失败\n"
+                f"最近错误：{error}\n"
+                f"时间：{datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')}"
+            ),
+            group="PriceBot",
+            severity="warn",
+        )
+        results = await self._notifier.send(message, channels=channels)
+        self._store.add_alert(
+            ts=now,
+            rule_id="source_error",
+            target_id=target["id"],
+            rule_name="源失效",
+            price=None,
+            message=f"数据源失效：{name}（{error}）",
+            channels=channels or [r.channel for r in results],
+            results=[{"channel": r.channel, "ok": r.ok, "detail": r.detail} for r in results],
+        )
+        logger.info(
+            f"SOURCE-ERROR ALERT {name} ({error_count} consecutive failures) -> {len(results)} channel(s)"
+        )
 
     async def refresh_now(self, target_id: str) -> dict[str, Any] | None:
         """Manual refresh (API button). Returns the fresh status or None."""
@@ -265,6 +390,8 @@ class MonitorEngine:
         else:
             entry["last_error"] = None
             entry["error_count"] = 0
+            # 恢复成功后重置失效推送节流：下次失效需重新累计连续失败次数
+            self._error_notified_at.pop(target_id, None)
         if quote is not None:
             entry["quote"] = quote
         entry["updated_at"] = time.time()

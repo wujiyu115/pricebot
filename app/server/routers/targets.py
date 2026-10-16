@@ -5,7 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from ...core.sources import list_source_names
-from ...models.schemas import TargetIn, TargetPatch
+from ...core.sources.base import SourceError, get_source_class
+from ...models.schemas import TargetIn, TargetPatch, VerifyIn
 from ..deps import get_services, not_found
 
 router = APIRouter(prefix="/api/targets", tags=["targets"])
@@ -28,6 +29,24 @@ async def get_sources(services=Depends(get_services)):
     from ...core.sources import list_sources
 
     return {"sources": list_sources()}
+
+
+@router.post("/verify", status_code=200)
+async def verify_symbol(payload: VerifyIn, services=Depends(get_services)):
+    """保存前试抓一次行情，验证 source+symbol（及 generic_http 的 extra）可用。"""
+    if payload.source not in list_source_names():
+        raise HTTPException(status_code=422, detail=f"unknown source: {payload.source}")
+    source_cls = get_source_class(payload.source)
+    source = source_cls(timeout=float(services.engine.timeout))
+    try:
+        quote = await source.fetch(payload.symbol, payload.extra or {})
+    except SourceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # 上游网络/解析异常统一回报
+        raise HTTPException(status_code=502, detail=f"fetch failed: {exc}") from exc
+    if quote.last is None:
+        raise HTTPException(status_code=422, detail="代码无法获取价格（返回无有效价格字段）")
+    return {"ok": True, "quote": quote.as_dict()}
 
 
 @router.post("", status_code=201)

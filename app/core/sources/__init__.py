@@ -17,6 +17,7 @@ from .sge_daily import SGEDailySource
 from .sina import SinaSource
 from .sina_futures import SinaFuturesSource
 from .sina_stock import SinaStockSource
+from .smzdm import SmzdmSource
 
 
 def load_builtin_sources() -> None:
@@ -27,6 +28,7 @@ def load_builtin_sources() -> None:
     assert BinanceSource.name
     assert SinaStockSource.name
     assert SinaFuturesSource.name
+    assert SmzdmSource.name
 
 
 __all__ = [
