@@ -171,6 +171,14 @@ class MonitorEngine:
             interval_days = 1.0
         if now - self._brief_sent_at < interval_days * 86400:
             return
+        # 并发去重：同一 tick 多个标的轮询成功会并发走到这里，若仅在发送完成后
+        # 才打点，先到的检查全部通过 → 简报连发 N 条（2026-10 生产实测同秒 3 条）。
+        # 锁内原子「检查间隔 + 预打点」，发送挪到锁外——慢通知渠道不阻塞其它
+        # 标的的规则求值；发送失败不回退打点，下个间隔重试。
+        async with self._lock:
+            if now - self._brief_sent_at < interval_days * 86400:
+                return
+            self._brief_sent_at = now
         await self._send_aggregated_briefing(now, interval_days=interval_days, cfg=cfg)
 
     async def send_briefing_now(self) -> dict:
@@ -181,6 +189,8 @@ class MonitorEngine:
             interval_days = max(0.0, float(raw_days))  # type: ignore[arg-type]
         except (TypeError, ValueError):
             interval_days = 1.0
+        async with self._lock:
+            self._brief_sent_at = time.time()
         return await self._send_aggregated_briefing(
             time.time(), interval_days=interval_days, cfg=cfg, manual=True
         )
@@ -232,7 +242,6 @@ class MonitorEngine:
             severity="info",
         )
         results = await self._notifier.send(message, channels=channels)
-        self._brief_sent_at = now
         summary = " / ".join(rows)
         self._store.add_alert(
             ts=now,

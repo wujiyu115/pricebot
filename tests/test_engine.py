@@ -506,6 +506,56 @@ class TestBriefingNotify:
         alerts = store.list_alerts(limit=10)
         assert alerts[0]["channels"] == ["fake_push", "other"]
 
+    async def test_concurrent_polls_send_one_briefing(
+        self, store, empty_target_store, rule_store, monkeypatch
+    ):
+        """同一 tick 多个标的并发轮询成功：简报只发一条（回归：同秒连发 3 条）。
+
+        生产事故（2026-10-17）：到期后同一 tick 内 3 个标的并发进入
+        _maybe_send_briefing，都通过间隔检查（打点在发送完成后才更新），
+        连发 3 条 Bark。修复 = 锁内原子「检查+预打点」，发送在锁外。
+
+        fake 源/渠道原生无 yield 点，任务会串行跑完，竞态无法夏现——
+        必须强制交错：fetch 加 sleep(0)，通知渠道加 50ms 延迟，
+        让多个任务同时悬浮在发送阶段（旧代码下 = 3 条全过检查）。
+        """
+        import asyncio
+
+        async def slow_fetch(self, symbol, extra=None):
+            await asyncio.sleep(0)
+            if not self.quotes:
+                raise helpers.SourceError("fake source exhausted")
+            return self.quotes.pop(0)
+
+        async def slow_send(self, message, config):
+            await asyncio.sleep(0.05)
+            helpers.PUSHED.append((self.name, message))
+            return helpers.SendResult(self.name, True, "captured")
+
+        monkeypatch.setattr(helpers.FakeSource, "fetch", slow_fetch)
+        monkeypatch.setattr(helpers.FakeNotifier, "send", slow_send)
+
+        add_target(empty_target_store)
+        empty_target_store.add(
+            {"name": "另一个", "source": "fake_test", "symbol": "FAKE_GOLD", "schedule": "always"}
+        )
+        empty_target_store.add(
+            {"name": "第三个", "source": "fake_test", "symbol": "FAKE_GOLD", "schedule": "always"}
+        )
+        engine = build_engine(store, empty_target_store, rule_store, self._config())
+
+        helpers.FakeSource.quotes = [self._quote(895.0), self._quote(896.0), self._quote(897.0)]
+        await engine._tick()  # 3 个标的同 tick 并发轮询成功
+        assert len(helpers.PUSHED) == 1  # 只发一条（旧代码：3 条）
+        # 先到的协程立刻发送，兄弟协程报价尚未落位：首条可能不含全部标的，
+        # 但一定包含首个标的的报价
+        assert "895.00" in helpers.PUSHED[0][1].body
+
+        # 后续 tick 间隔未到：不再发
+        helpers.FakeSource.quotes = [self._quote(898.0)] * 3
+        await engine._tick()
+        assert len(helpers.PUSHED) == 1
+
     async def test_disabled_by_default(self, store, empty_target_store, rule_store):
         target = add_target(empty_target_store)
         engine = build_engine(store, empty_target_store, rule_store)  # 无该配置
