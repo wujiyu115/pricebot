@@ -40,9 +40,9 @@ PriceBot：国内金价（上金所 AU9999 / 黄金T+D）监控推送系统。�
 ## Unraid 生产容器更新流程（目标机 tank）
 
 - SSH：`ssh -i ~/.ssh/id_rsa_nas root@192.168.31.139`
-- 镜像 `wujiyu115/pricebot:latest`，模板 `/boot/config/plugins/dockerMan/templates-user/my-pricebot.xml`
+- 镜像 `ghcr.io/wujiyu115/pricebot:latest`（**注意是 GHCR 不是 Docker Hub**，早期文档误记为 `wujiyu115/pricebot`），模板 `/boot/config/plugins/dockerMan/templates-user/my-pricebot.xml`（`<Repository>` 已指向 ghcr.io）；CI 同时推 `:{github.sha}` tag 供回滚
 - 持久化：`/mnt/user/appdata/pricebot/config:/app/config`（user_settings.json）、`data`（SQLite+targets/rules）、`logs`；端口 `6106`
-- 流程：push main → CI（`.github/workflows/docker.yml` 多架构构建 + 冒烟测试）→ NAS `docker pull` → **严禁裸 docker run**，用 `/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container pricebot`（保留 template 绑定）→ `docker start pricebot` → 自检：
+- 流程：push main → CI（`.github/workflows/docker.yml` 多架构构建 + 冒烟测试，约 3.5 分钟）→ NAS `docker pull ghcr.io/wujiyu115/pricebot:latest` → **严禁裸 docker run**，用 `/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container pricebot`（保留 template 绑定）→ `docker start pricebot` → 自检：
   ```
   docker ps --filter name=pricebot   # Up ... (healthy)
   curl http://localhost:6106/api/dashboard   # engine.running=true 且 quotes 有真实价格
