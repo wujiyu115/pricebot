@@ -14,6 +14,8 @@ export interface Quote {
     turnover: number | null
     time: string
     unit?: string
+    /** 源附加信息（smzdm 商城/到手价、manmanbuy 历史最低/价位状态等） */
+    extra?: Record<string, unknown>
 }
 
 export interface Target {

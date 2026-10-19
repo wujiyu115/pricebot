@@ -301,3 +301,28 @@ class TestDashboard:
         assert body["engine"]["running"] is True
         assert body["counts"]["targets"] >= 2
         assert "sina" in body["sources"]
+
+    def test_dashboard_passes_quote_extra(self, client):
+        """quote.extra 必须随 dashboard 下发（前端要展示历史最低/价位状态等源附加信息）。"""
+        resp = client.post(
+            "/api/targets",
+            json={"name": "附加信息标的", "source": "fake_test", "symbol": "FAKE_GOLD"},
+        )
+        target_id = resp.json()["target"]["id"]
+        helpers.FakeSource.quotes = [
+            helpers.Quote(
+                symbol="FAKE_GOLD",
+                name="测试黄金",
+                last=1759.0,
+                extra={"mall": "京东商城", "hist_low": 1499.0, "trend_points": 341},
+            )
+        ]
+        client.post(f"/api/targets/{target_id}/refresh")
+
+        body = client.get("/api/dashboard").json()
+        row = next(q for q in body["quotes"] if q["target_id"] == target_id)
+        assert row["quote"]["extra"] == {
+            "mall": "京东商城",
+            "hist_low": 1499.0,
+            "trend_points": 341,
+        }

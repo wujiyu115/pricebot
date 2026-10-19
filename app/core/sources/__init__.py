@@ -13,6 +13,7 @@ from .base import (
 )
 from .binance import BinanceSource
 from .generic_http import GenericHTTPSource
+from .manmanbuy import ManmanbuySource
 from .sge_daily import SGEDailySource
 from .sina import SinaSource
 from .sina_futures import SinaFuturesSource
@@ -29,6 +30,7 @@ def load_builtin_sources() -> None:
     assert SinaStockSource.name
     assert SinaFuturesSource.name
     assert SmzdmSource.name
+    assert ManmanbuySource.name
 
 
 __all__ = [

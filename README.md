@@ -41,6 +41,8 @@ docker run -d --name pricebot -p 6106:6106 \
 | 商品期货主力连续 | sina_futures | `SC0`(原油) / `RB0`(螺纹) / `CU0`(铜) / `I0`(铁矿) / `AU0`(沪金) |
 | 加密货币（技术演示） | binance | `BTCUSDT` / `ETHUSDT` / `SOLUSDT` |
 | 电商商品售价 | generic_http | 任意服务端渲染价格的商品页/价格 API（URL + JSONPath/正则） |
+| 电商商品历史价（慢慢买） | manmanbuy | 商品链接（如 `https://item.jd.com/100012043978.html`）或慢慢买商品 id |
+| 什么值得买好价 | smzdm | 商品关键词（如 `action6`） |
 
 加密货币走 Binance 官方只读公共镜像（data-api.binance.vision），7x24 交易、涨跌幅按 24h 开盘基准。
 
@@ -61,6 +63,25 @@ docker run -d --name pricebot -p 6106:6106 \
 
 - JSON 接口填 `json_path`（如 `data.price`），HTML/文本填 `regex`（第一个捕获组），支持自定义 headers（带 Cookie 调用三方价格接口）
 - 实测可用：小米商城（服务端渲染、价格未混淆）；**京东/淘宝商品页价格由 JS 登录后加载且服务端混淆**（`"price":"4??"`），不支持直接抓取——请改用带 Cookie 的价格接口或三方比价 API
+
+**电商商品历史价**（manmanbuy 源，免签名直连慢慢买历史价格接口）：
+
+```json
+{
+  "name": "茅台飞天 500ml",
+  "source": "manmanbuy",
+  "symbol": "https://item.jd.com/100012043978.html",
+  "interval_seconds": 600,
+  "extra": { "price_field": "price", "window_days": 90 }
+}
+```
+
+- `symbol` 填商品链接（京东/天猫/慢慢买自身页面）或纯数字慢慢买商品 id
+- 返回：当前价（`last`）、窗口内最低/最高（`low`/`high`）、涨跌幅基准（`prev_close`，取曲线倒数第二天）
+  ——历史最低在 `extra.hist_low` + `extra.hist_low_date`，价位文案在 `extra.status`（如「30天最低」）
+- `extra.price_field`：`price`（默认，标价 `spmoney`）| `final`（到手价，含满减/券）
+- `extra.window_days`：`low`/`high` 的统计窗口天数，默认 90，`0` = 全历史
+- 逆向细节（免签通道为何可用、哪些主机已下线）见 `scripts/manmanbuy_reverse_notes.md`
 A股代码规则：`sh`/`sz`/`bj` + 6 位数字；指数 `sh000xxx`/`sz399xxx`（单位:点）。涨跌幅按昨收自动计算。
 期货代码规则：品种 + 0（主力连续），如 `SC0`/`RB0`/`CU0`/`HC0`/`J0`/`M0`/`TA0`/`AU0`/`AG0`；涨跌幅按昨结算计算；单位按品种映射（原油=元/桶、金=元/克、银=元/千克、其余=元/吨，可用标的 extra.unit 覆盖）。
 
@@ -70,7 +91,7 @@ A股代码规则：`sh`/`sz`/`bj` + 6 位数字；指数 `sh000xxx`/`sz399xxx`�
 app/
 ├── core/
 │   ├── config/     # 两层配置（layering 纯函数 + ConfigManager）
-│   ├── sources/    # 数据源适配器注册表（sina / sge_daily / generic_http）
+│   ├── sources/    # 数据源适配器注册表（sina / sina_stock / sina_futures / sge_daily / binance / smzdm / manmanbuy / generic_http）
 │   ├── monitor/    # 引擎、规则求值、SQLite 存储、交易时段、后台 loop
 │   └── notify/     # 推送渠道适配器（bark / telegram / feishu / dingtalk / webhook）
 ├── server/         # FastAPI 路由 + SPA 挂载

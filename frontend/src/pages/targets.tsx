@@ -45,6 +45,9 @@ function TargetDialog({
     const [ghUrl, setGhUrl] = useState("")
     const [ghJsonPath, setGhJsonPath] = useState("")
     const [ghRegex, setGhRegex] = useState("")
+    // manmanbuy：标价 vs 到手价、low/high 统计窗口
+    const [mmbPriceField, setMmbPriceField] = useState<"price" | "final">("price")
+    const [mmbWindowDays, setMmbWindowDays] = useState("90")
     const [verifyResult, setVerifyResult] = useState<
         { ok: true; quote: { name: string; last: number; prev_close: number | null; unit: string; time: string } } | { ok: false; error: string } | null
     >(null)
@@ -60,21 +63,36 @@ function TargetDialog({
             setGhUrl(gh?.url ?? "")
             setGhJsonPath(gh?.json_path ?? "")
             setGhRegex(gh?.regex ?? "")
+            const mmb = editing?.extra as Record<string, unknown> | undefined
+            setMmbPriceField(mmb?.price_field === "final" ? "final" : "price")
+            setMmbWindowDays(mmb?.window_days != null ? String(mmb.window_days) : "90")
         }
     }, [open, editing])
 
     const sourceMeta = sources.find((s) => s.name === source)
 
-    const verifyMutation = useMutation({
-        mutationFn: async () => {
-            const extra: Record<string, string> = {}
-            if (source === "generic_http") {
-                extra.url = ghUrl
-                if (ghJsonPath) extra.json_path = ghJsonPath
-                if (ghRegex) extra.regex = ghRegex
+    // 按源组装的 extra（generic_http / manmanbuy 各一套）
+    function buildExtra(): Record<string, unknown> {
+        if (source === "generic_http") {
+            const extra: Record<string, unknown> = { url: ghUrl }
+            if (ghJsonPath) extra.json_path = ghJsonPath
+            if (ghRegex) extra.regex = ghRegex
+            return extra
+        }
+        if (source === "manmanbuy") {
+            const extra: Record<string, unknown> = { price_field: mmbPriceField }
+            const days = Number(mmbWindowDays)
+            if (mmbWindowDays.trim() !== "" && Number.isFinite(days) && days >= 0) {
+                extra.window_days = Math.trunc(days)
             }
-            return api.verifySymbol({ source, symbol: symbol.trim(), extra })
-        },
+            return extra
+        }
+        return {}
+    }
+
+    const verifyMutation = useMutation({
+        mutationFn: async () =>
+            api.verifySymbol({ source, symbol: symbol.trim(), extra: buildExtra() }),
         onSuccess: (r) => setVerifyResult({ ok: true, quote: r.quote }),
         onError: (err) => setVerifyResult({ ok: false, error: err.message }),
     })
@@ -82,12 +100,8 @@ function TargetDialog({
     const mutation = useMutation({
         mutationFn: async () => {
             const payload: Record<string, unknown> = { name, source, symbol, schedule }
-            if (source === "generic_http") {
-                const extra: Record<string, string> = { url: ghUrl }
-                if (ghJsonPath) extra.json_path = ghJsonPath
-                if (ghRegex) extra.regex = ghRegex
-                payload.extra = extra
-            }
+            const extra = buildExtra()
+            if (Object.keys(extra).length > 0) payload.extra = extra
             if (editing) return api.updateTarget(editing.id, payload)
             return api.createTarget(payload)
         },
@@ -226,6 +240,39 @@ function TargetDialog({
                             <p className="text-xs text-muted-foreground">
                                 适合服务端渲染价格的商城/API；京东/淘宝商品页价格由 JS
                                 加载且需登录，不支持直接抓取，请用带 Cookie 的三方价格接口。
+                            </p>
+                        </div>
+                    )}
+                    {source === "manmanbuy" && (
+                        <div className="space-y-3 rounded-md border p-3">
+                            <div className="space-y-1.5">
+                                <Label>价格口径</Label>
+                                <Select
+                                    value={mmbPriceField}
+                                    onValueChange={(v) => setMmbPriceField(v as "price" | "final")}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="price">商品标价</SelectItem>
+                                        <SelectItem value="final">到手价（含满减/券）</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>区间统计窗口（天）</Label>
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    value={mmbWindowDays}
+                                    onChange={(e) => setMmbWindowDays(e.target.value)}
+                                    placeholder="90（0 = 全历史）"
+                                />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                代码填商品链接（如 item.jd.com/100012043978.html）或慢慢买商品 id。
+                                返回当前价 + 区间最低/最高，历史最低与价位文案随行情展示。
                             </p>
                         </div>
                     )}

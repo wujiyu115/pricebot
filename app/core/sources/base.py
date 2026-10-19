@@ -40,6 +40,12 @@ class Quote:
     extra: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
+        """API 序列化。含 ``extra``（源附加信息：smzdm 的商城/到手价、
+        manmanbuy 的历史最低/价位状态/日线点数等）。
+
+        ``extra`` 是各源自定的扁平小 dict（实测最大 ~0.5KB），随 ``/api/dashboard``
+        一起下发，供前端展示与推送文案引用。
+        """
         return {
             "symbol": self.symbol,
             "name": self.name,
@@ -54,6 +60,7 @@ class Quote:
             "turnover": self.turnover,
             "time": self.time,
             "unit": self.unit,
+            "extra": dict(self.extra or {}),
         }
 
 

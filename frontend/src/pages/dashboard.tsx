@@ -14,6 +14,22 @@ function fmtTime(ts: number | null | undefined): string {
     return new Date(ts * 1000).toLocaleTimeString("zh-CN", { hour12: false })
 }
 
+/** 标题区徽章用的短标符：URL 类 symbol 只留末段路径（完整值进 title 悬浮提示）。 */
+function shortSymbol(symbol: string): string {
+    if (!/^https?:\/\//i.test(symbol)) return symbol
+    try {
+        const u = new URL(symbol)
+        const seg = u.pathname.split("/").filter(Boolean).pop() ?? ""
+        const core = seg.replace(/\.(?:html?|php|aspx?|htm)$/i, "")
+        if (!core) return u.hostname.replace(/^www\./, "")
+        // 形如 100012043978（京东 SKU）/ d.aspx?id=N 取查询参数
+        if (core.toLowerCase() === "d" && u.searchParams.get("id")) return `id ${u.searchParams.get("id")}`
+        return core
+    } catch {
+        return symbol.length > 24 ? `${symbol.slice(0, 22)}…` : symbol
+    }
+}
+
 function QuoteCard({
     name,
     symbol,
@@ -28,15 +44,25 @@ function QuoteCard({
     const last = quote?.last ?? null
     const pct =
         quote?.prev_close && quote.last ? ((quote.last - quote.prev_close) / quote.prev_close) * 100 : null
+    const ex = (quote?.extra ?? {}) as Record<string, unknown>
+    const histLow = typeof ex.hist_low === "number" ? ex.hist_low : null
+    const status = typeof ex.status === "string" && ex.status ? ex.status : ""
+    const mall = typeof ex.mall === "string" && ex.mall ? ex.mall : ""
+    // 历史最低低于现价时标绿（现在买比历史最低贵）
+    const aboveLow = histLow != null && last != null && histLow > 0 && last > histLow
     return (
         <Card>
             <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between text-base">
-                    <span>{name}</span>
-                    <div className="flex items-center gap-2">
+                <CardTitle className="flex items-center justify-between gap-2 text-base">
+                    <span className="truncate">{name}</span>
+                    <div className="flex shrink-0 items-center gap-2">
                         <Sparkline targetId={targetId} />
-                        <Badge variant="outline" className="font-mono text-xs text-muted-foreground">
-                            {symbol}
+                        <Badge
+                            variant="outline"
+                            title={symbol}
+                            className="max-w-32 truncate font-mono text-xs text-muted-foreground"
+                        >
+                            {shortSymbol(symbol)}
                         </Badge>
                     </div>
                 </CardTitle>
@@ -60,10 +86,29 @@ function QuoteCard({
                                 </span>
                             )}
                         </div>
-                        <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                             {quote?.bid != null && <span>买一 {quote.bid.toFixed(2)}</span>}
                             {quote?.ask != null && <span>卖一 {quote.ask.toFixed(2)}</span>}
                             {quote?.prev_close != null && <span>昨收 {quote.prev_close.toFixed(2)}</span>}
+                            {quote?.low != null && quote?.high != null && (
+                                <span>
+                                    区间 {quote.low.toFixed(2)}–{quote.high.toFixed(2)}
+                                </span>
+                            )}
+                            {histLow != null && histLow > 0 && (
+                                <span className={aboveLow ? "text-green-600" : "text-red-600"}>
+                                    历史最低 {histLow.toFixed(2)}
+                                    {typeof ex.hist_low_date === "string" && ex.hist_low_date
+                                        ? `（${String(ex.hist_low_date).slice(0, 10)}）`
+                                        : ""}
+                                </span>
+                            )}
+                            {mall && <span>{mall}</span>}
+                            {status && (
+                                <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                                    {status}
+                                </Badge>
+                            )}
                         </div>
                     </div>
                 )}
