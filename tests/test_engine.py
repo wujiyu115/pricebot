@@ -566,6 +566,130 @@ class TestBriefingNotify:
         assert store.list_alerts(limit=10) == []
 
 
+class TestMessageLinks:
+    """简报/告警消息的链接注入：源自带链接（quote.extra.url）优先，其次标的 extra.link_url。"""
+
+    @staticmethod
+    def _brief_config() -> dict:
+        return {
+            "interval_seconds": 30,
+            "briefing_notify": {"enabled": True, "interval_days": 1, "channels": ["fake_push"]},
+        }
+
+    async def test_alert_uses_quote_source_url(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        rule_store.add(
+            Rule(
+                id="r1",
+                target_id=target["id"],
+                name="跌破心理价",
+                type="cross_below",
+                threshold=2300.0,
+                channels=["fake_push"],
+            ).as_dict()
+        )
+        helpers.FakeSource.quotes = [
+            helpers.Quote(
+                symbol="FAKE_GOLD",
+                name="测试黄金",
+                last=2200.0,
+                extra={"url": "https://post.smzdm.com/p/abc/"},
+            )
+        ]
+        engine = build_engine(store, empty_target_store, rule_store)
+        await engine.refresh_now(target["id"])
+        assert len(helpers.PUSHED) == 1
+        assert helpers.PUSHED[0][1].url == "https://post.smzdm.com/p/abc/"  # 源链接直通
+
+    async def test_alert_falls_back_to_target_link_url(self, store, empty_target_store, rule_store):
+        target = empty_target_store.add(
+            {
+                "name": "带链接标的",
+                "source": "fake_test",
+                "symbol": "FAKE_GOLD",
+                "schedule": "always",
+                "extra": {"link_url": "https://www.mi.com/buy/detail?product_id=50001315"},
+            }
+        )
+        rule_store.add(
+            Rule(
+                id="r1",
+                target_id=target["id"],
+                name="降价提醒",
+                type="cross_below",
+                threshold=1500.0,
+                channels=["fake_push"],
+            ).as_dict()
+        )
+        helpers.FakeSource.quotes = [
+            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=999.0)
+        ]
+        engine = build_engine(store, empty_target_store, rule_store)
+        await engine.refresh_now(target["id"])
+        assert len(helpers.PUSHED) == 1
+        assert helpers.PUSHED[0][1].url == "https://www.mi.com/buy/detail?product_id=50001315"
+
+    async def test_alert_no_link_by_default(self, store, empty_target_store, rule_store):
+        target = add_target(empty_target_store)
+        rule_store.add(
+            Rule(
+                id="r1",
+                target_id=target["id"],
+                name="上穿",
+                type="cross_above",
+                threshold=800.0,
+                channels=["fake_push"],
+            ).as_dict()
+        )
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=905.0)]
+        engine = build_engine(store, empty_target_store, rule_store)
+        await engine.refresh_now(target["id"])
+        assert helpers.PUSHED[0][1].url == ""
+
+    async def test_briefing_rows_include_links(self, store, empty_target_store, rule_store):
+        import time
+
+        t1 = add_target(empty_target_store)  # 源链接
+        t2 = empty_target_store.add(
+            {
+                "name": "自定义链接",
+                "source": "fake_test",
+                "symbol": "FAKE_GOLD",
+                "schedule": "always",
+                "extra": {"link_url": "https://example.com/product"},
+            }
+        )
+        t3 = empty_target_store.add(
+            {"name": "无链接", "source": "fake_test", "symbol": "FAKE_GOLD", "schedule": "always"}
+        )
+        engine = build_engine(store, empty_target_store, rule_store, self._brief_config())
+
+        helpers.FakeSource.quotes = [
+            helpers.Quote(symbol="FAKE_GOLD", name="测试黄金", last=895.0, extra={"url": "https://post.smzdm.com/p/xyz/"}),
+        ]
+        await engine.refresh_now(t1["id"])
+        msg = helpers.PUSHED[0][1]
+        assert "🔗 https://post.smzdm.com/p/xyz/" in msg.body
+        assert msg.url == "https://post.smzdm.com/p/xyz/"  # 整条消息跳转 = 源链接
+
+        engine._brief_sent_at = time.time() - 86400 - 1
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="自定义链接", last=896.0)]
+        await engine.refresh_now(t2["id"])
+        msg2 = helpers.PUSHED[1][1]
+        assert "🔗 https://example.com/product" in msg2.body
+        assert msg2.url == "https://example.com/product"  # 后一个有链接的标的覆盖跳转链接
+
+        engine._brief_sent_at = time.time() - 86400 - 1
+        helpers.FakeSource.quotes = [helpers.Quote(symbol="FAKE_GOLD", name="无链接", last=897.0)]
+        await engine.refresh_now(t3["id"])
+        msg3 = helpers.PUSHED[2][1]
+        # 聚合的是全部有报价标的：t1/t2 的历史报价仍在，其链接行仍在，跳转=最后一个有链接的 t2
+        assert "3 个标的" in msg3.title
+        assert "https://post.smzdm.com/p/xyz/" in msg3.body
+        assert "https://example.com/product" in msg3.body
+        assert msg3.url == "https://example.com/product"
+
+
 class TestTickScheduling:
     async def test_disabled_target_not_polled(self, store, empty_target_store, rule_store):
         target = add_target(empty_target_store)

@@ -37,9 +37,12 @@ class DingTalkNotifier(Notifier):
             sep = "&" if "?" in url else "?"
             url = f"{url}{sep}timestamp={ts}&sign={quote_plus(sign)}"
 
+        text = f"## {message.title}\n\n{message.body}"
+        if message.url:
+            text += f"\n\n[查看详情]({message.url})"
         payload = {
             "msgtype": "markdown",
-            "markdown": {"title": message.title, "text": f"## {message.title}\n\n{message.body}"},
+            "markdown": {"title": message.title, "text": text},
         }
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

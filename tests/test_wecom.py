@@ -36,6 +36,23 @@ def mock_transport(monkeypatch):
 
 
 class TestWeCom:
+    async def test_url_appends_markdown_link(self, mock_transport):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"errcode": 0, "errmsg": "ok"})
+
+        requests = mock_transport(handler)
+        result = await WeComNotifier().send(
+            Message(
+                title="好价提醒",
+                body="action6 2293.30 元",
+                url="https://post.smzdm.com/p/abc/",
+            ),
+            {"webhook_url": _URL},
+        )
+        assert result.ok is True
+        content = json.loads(requests[0].content)["markdown"]["content"]
+        assert "[查看详情](https://post.smzdm.com/p/abc/)" in content
+
     async def test_markdown_payload_contract(self, mock_transport):
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json={"errcode": 0, "errmsg": "ok"})

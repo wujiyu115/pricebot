@@ -56,6 +56,8 @@ class NtfyNotifier(Notifier):
         tags = [t.strip() for t in str(config.get("tags") or "").split(",") if t.strip()]
         if tags:
             payload["tags"] = tags
+        if message.url:
+            payload["click"] = message.url  # 点击通知跳转（JSON 发布的官方字段）
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

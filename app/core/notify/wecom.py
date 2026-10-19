@@ -28,6 +28,8 @@ class WeComNotifier(Notifier):
             return SendResult("wecom", False, "webhook_url not configured")
 
         content = f"**{message.title}**\n{message.body}"
+        if message.url:
+            content += f"\n\n[查看详情]({message.url})"
         if len(content.encode("utf-8")) > 4000:
             content = content[:1300]  # markdown 上限 4096 字节，保守截断
         payload = {"msgtype": "markdown", "markdown": {"content": content}}

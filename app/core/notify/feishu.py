@@ -29,9 +29,12 @@ class FeishuNotifier(Notifier):
         if not url:
             return SendResult("feishu", False, "webhook_url not configured")
 
+        text = f"{message.title}\n{message.body}"
+        if message.url:
+            text += f"\n{message.url}"  # 文本消息，飞书会自动识别 URL 为可点击链接
         payload: dict[str, Any] = {
             "msg_type": "text",
-            "content": {"text": f"{message.title}\n{message.body}"},
+            "content": {"text": text},
         }
         secret = str(config.get("secret") or "").strip()
         if secret:

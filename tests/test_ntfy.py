@@ -58,6 +58,23 @@ class TestNtfy:
         # 关键契约: JSON 体里 priority 必须是整数（字符串会得到误导性 400 invalid JSON）
         assert body["priority"] == 4
         assert body["tags"] == ["chart_with_upwards_trend"]
+        assert "click" not in body  # 无 url 时不下发 click
+
+    async def test_click_url_when_message_has_url(self, capture):
+        result = await NtfyNotifier().send(
+            Message(
+                title="🟢 好价提醒",
+                body="action6 2293.30 元",
+                url="https://post.smzdm.com/p/abc/",
+            ),
+            CONFIG,
+        )
+        assert result.ok is True
+        import json
+
+        body = json.loads(capture[0].content)
+        # message.url → ntfy 官方 click 字段：点击通知直接跳转
+        assert body["click"] == "https://post.smzdm.com/p/abc/"
 
     async def test_priority_aliases_and_int(self, capture):
         notifier = NtfyNotifier()

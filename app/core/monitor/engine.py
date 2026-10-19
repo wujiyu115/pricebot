@@ -195,11 +195,30 @@ class MonitorEngine:
             time.time(), interval_days=interval_days, cfg=cfg, manual=True
         )
 
+    def _target_link(self, target: dict[str, Any], quote: Quote | None) -> str:
+        """标的的详情链接：源返回的链接优先，其次 extra.link_url。
+
+        - smzdm 等源会把好价文章链接放在 quote.extra["url"]
+        - 刻意不用 extra.url 作为自定义字段：generic_http 里它是抓价 API 端点
+          （不是给人看的页面），语义冲突；人工配置用 link_url
+        """
+        if quote and isinstance(quote.extra, dict):
+            src_url = str(quote.extra.get("url") or "").strip()
+            if src_url.startswith("http"):
+                return src_url
+        extra = target.get("extra")
+        if isinstance(extra, dict):
+            link = str(extra.get("link_url") or "").strip()
+            if link.startswith("http"):
+                return link
+        return ""
+
     async def _send_aggregated_briefing(
         self, now: float, interval_days: float, cfg: dict[str, Any], manual: bool = False
     ) -> dict:
         rows: list[str] = []
         quoted = 0
+        click_url = ""
         targets = self._targets.list()
         for target in targets:
             entry = self._status.get(target["id"]) or {}
@@ -213,7 +232,14 @@ class MonitorEngine:
             if quote.prev_close:
                 pct = (quote.last - quote.prev_close) / quote.prev_close * 100
                 change_str = f"（较昨收 {pct:+.2f}%）"
-            rows.append(f"{name}：{quote.last:.2f} {unit}{change_str}".rstrip())
+            row = f"{name}：{quote.last:.2f} {unit}{change_str}".rstrip()
+            link = self._target_link(target, quote)
+            if link:
+                # 每个带链接的标的后附一行可点击链接；最后一个作为整条消息的跳转链接
+                rows.append(f"{row}\n🔗 {link}")
+                click_url = link
+            else:
+                rows.append(row)
 
         if not rows:
             logger.info("BRIEFING skipped: no target has a quote yet")
@@ -240,6 +266,7 @@ class MonitorEngine:
             body="\n".join(body_lines),
             group="PriceBot",
             severity="info",
+            url=click_url,  # bark/ntfy 整条消息的跳转链接（最后一个有链接的标的）
         )
         results = await self._notifier.send(message, channels=channels)
         summary = " / ".join(rows)
@@ -374,7 +401,12 @@ class MonitorEngine:
         channels = rule.channels or None
         icon = "🟢" if "up" in rule.type or rule.type == "cross_above" else "🔴"
         results = await self._notifier.send(
-            Message(title=f"{icon} {message_text}", body=detail, group="PriceBot"),
+            Message(
+                title=f"{icon} {message_text}",
+                body=detail,
+                group="PriceBot",
+                url=self._target_link(target, quote),  # bark/ntfy 跳转、markdown 渠道附「查看」链接
+            ),
             channels=channels,
         )
         self._store.add_alert(
