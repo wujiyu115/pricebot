@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS alerts (
 CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts DESC);
 """
 
+# 告警历史只保留最新 N 条（插入后自动裁剪，历史积压在启动时也会被裁剪）
+ALERTS_MAX_ROWS = 50
+
 
 class Store:
     def __init__(self, db_path: str | Path, retention_days: int = 90) -> None:
@@ -49,6 +52,7 @@ class Store:
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.executescript(_SCHEMA)
+            self._trim_alerts()
             self._conn.commit()
 
     # ------------------------------------------------------------------ ticks
@@ -91,6 +95,15 @@ class Store:
             self._conn.commit()
         return cur.rowcount or 0
 
+    def _trim_alerts(self) -> int:
+        """删除超出 ALERTS_MAX_ROWS 的旧告警（按 ts 新旧保留最新 N 条）。"""
+        cur = self._conn.execute(
+            "DELETE FROM alerts WHERE id NOT IN "
+            "(SELECT id FROM alerts ORDER BY ts DESC, id DESC LIMIT ?)",
+            (ALERTS_MAX_ROWS,),
+        )
+        return cur.rowcount or 0
+
     # ----------------------------------------------------------------- alerts
     def add_alert(
         self,
@@ -120,6 +133,9 @@ class Store:
                     json.dumps(results, ensure_ascii=False),
                 ),
             )
+            removed = self._trim_alerts()
+            if removed:
+                logger.info("trimmed %d old alerts (keep latest %d)", removed, ALERTS_MAX_ROWS)
             self._conn.commit()
 
     def list_alerts(self, limit: int = 50, target_id: str | None = None) -> list[dict[str, Any]]:

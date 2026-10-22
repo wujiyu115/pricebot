@@ -73,3 +73,26 @@ class TestAlerts:
         assert len(store.list_alerts()) == 1
         store.clear_alerts()
         assert store.list_alerts() == []
+
+    def test_retention_keep_latest_50(self, store):
+        """插入超量告警后只保留最新 50 条，且保留的是 ts 最大的那些。"""
+        for i in range(60):
+            store.add_alert(float(i), f"r{i}", "t", "n", float(i), f"m{i}", [], [])
+        alerts = store.list_alerts(limit=500)
+        assert len(alerts) == 50
+        assert alerts[0]["ts"] == 59.0  # 最新在前
+        assert alerts[-1]["ts"] == 10.0  # 0~9 被裁剪
+
+    def test_retention_trims_backlog_on_init(self, store, tmp_path):
+        """历史积压（升级前遗留）在 Store 重开时也会被裁剪。"""
+        for i in range(70):
+            store.add_alert(float(i), f"r{i}", "t", "n", float(i), f"m{i}", [], [])
+        db = store.db_path
+        store.close()
+
+        from app.core.monitor.store import Store
+
+        reopened = Store(db)
+        assert len(reopened.list_alerts(limit=500)) == 50
+        assert reopened.list_alerts()[0]["ts"] == 69.0
+        reopened.close()
