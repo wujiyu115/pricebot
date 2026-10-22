@@ -12,7 +12,7 @@ class TargetIn(BaseModel):
     source: str = Field(min_length=1)
     symbol: str = Field(min_length=1)
     enabled: bool = True
-    schedule: Literal["always", "sge", "cn_stock", "hk_stock", "cn_futures"] = "always"
+    schedule: Literal["always", "sge", "cn_stock", "hk_stock", "us_stock", "cn_futures"] = "always"
     interval_seconds: int | None = Field(default=None, ge=5, le=86400)
     extra: dict[str, Any] = Field(default_factory=dict)
 
@@ -22,7 +22,7 @@ class TargetPatch(BaseModel):
     source: str | None = None
     symbol: str | None = None
     enabled: bool | None = None
-    schedule: Literal["always", "sge", "cn_stock", "hk_stock", "cn_futures"] | None = None
+    schedule: Literal["always", "sge", "cn_stock", "hk_stock", "us_stock", "cn_futures"] | None = None
     interval_seconds: int | None = Field(default=None, ge=5, le=86400)
     extra: dict[str, Any] | None = None
 

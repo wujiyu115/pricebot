@@ -25,6 +25,15 @@ _SH_INDEX = (
 )
 
 
+# 2026-10-22 实测样本（苹果 gb_aapl，与腾讯行情交叉对照：昨敆339.50 今开339.36 高345.25 低338.83）
+_AAPL_US = (
+    "苹果,343.9900,1.32,2026-10-22 09:30:13,4.4900,339.3600,345.2500,338.8300,"
+    "348.1500,242.8900,35614126,39244484,5020252050093,8.30,41.440000,0.00,0.00,0.00,0.00,"
+    "14594180209,63,343.8900,-0.03,-0.10,Oct 21 07:59PM EDT,Oct 21 04:00PM EDT,339.5000,4174623,1,2026,"
+    "12223111721.0000,344.1799,343.5000,1436007934.9952,344.0500,339.5000"
+)
+
+
 def _payload(symbol: str, fields: str) -> bytes:
     return f'var hq_str_{symbol}="{fields}";\n'.encode("gbk")
 
@@ -107,6 +116,38 @@ class TestSinaStockParse:
         assert quote.time == "2026-10-21 16:08:20"
         assert quote.unit == "港元"
         assert quote.extra["change_pct"] == pytest.approx(-4.045, abs=0.01)
+
+    async def test_us_stock_fields(self, mock_transport):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert "gb_aapl" in str(request.url)
+            return httpx.Response(200, content=_payload("gb_aapl", _AAPL_US))
+
+        mock_transport(handler)
+        quote = await SinaStockSource().fetch("USaapl")  # 大小写归一
+        assert quote.name == "苹果"
+        assert quote.last == 343.99
+        assert quote.prev_close == 339.50  # last - 涨跌额
+        assert quote.open == 339.36
+        assert quote.high == 345.25
+        assert quote.low == 338.83
+        assert quote.bid is None  # 美股无盘口
+        assert quote.ask is None
+        assert quote.volume == 35614126  # 股
+        assert quote.turnover is None  # gb_ 无成交额
+        assert quote.time == "2026-10-22 09:30:13"
+        assert quote.unit == "美元"
+        assert quote.extra["change_pct"] == 1.32
+
+    async def test_us_symbol_strips_exchange_suffix(self, mock_transport):
+        """usbrk.b.n 形式（smartbox 回填）应去掉 .n 后缀请求 gb_brk.b。"""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert "gb_brk.b" in str(request.url)
+            return httpx.Response(200, content=_payload("gb_brk.b", _AAPL_US))
+
+        mock_transport(handler)
+        quote = await SinaStockSource().fetch("usbrk.b.n")
+        assert quote.last == 343.99
 
     async def test_invalid_symbol_rejected(self):
         with pytest.raises(SourceError, match="invalid stock symbol"):

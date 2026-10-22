@@ -15,8 +15,8 @@ def test_parse_mixed_results():
         '\\u817e\\u8baf\\u6cd5\\u5174\\u4e03\\u4e09\\u8d2dA~txfxqsga~QZ"'
     )
     results = parse_smartbox(raw)
-    # sh000847 指数 + hk00700 正股 + hk80700（人民币柜台，同为 GP 正股）；us ADR、QZ 权证不返回
-    assert [r["symbol"] for r in results] == ["sh000847", "hk00700", "hk80700"]
+    # sh000847 指数 + hk00700/hk80700 正股 + us ADR；QZ 权证不返回
+    assert [r["symbol"] for r in results] == ["sh000847", "hk00700", "hk80700", "ustcehy"]
     assert results[0]["name"] == "腾讯济安"
     assert results[0]["kind"] == "index"
     assert results[1]["name"] == "腾讯控股"
@@ -62,3 +62,26 @@ def test_parse_dedup():
     )
     results = parse_smartbox(raw)
     assert len(results) == 1
+
+
+def test_parse_us_stocks():
+    """美股：去交易所后缀、过滤 ETF、ADR 保留。"""
+    # 2026-10-22 实测: 搜「苹果」（截取，前 1 正股 + 2 ETF）
+    raw = (
+        'v_hint="us~aapl.oq~\\u82f9\\u679c~pg~GP^'
+        'us~aapb.oq~2\\u500d\\u505a\\u591a\\u82f9\\u679cetfgraniteshares~2bzdpgetfgraniteshares~GP^'
+        'us~aply.am~\\u82f9\\u679c\\u671f\\u6743\\u6536\\u76caetfyieldmax~pgqqsyetfyieldmax~GP"'
+    )
+    results = parse_smartbox(raw)
+    assert [r["symbol"] for r in results] == ["usaapl"]  # 后缀 .oq 去除，ETF 过滤
+
+    # 2026-10-22 实测: 搜「腾讯」里的美股 ADR（tcehy.ps）
+    raw = "v_hint=\"us~tcehy.ps~\\u817e\\u8baf\\u63a7\\u80a1(adr)~txkgadr~GP\""
+    results = parse_smartbox(raw)
+    assert results[0]["symbol"] == "ustcehy"
+    assert results[0]["name"] == "腾讯控股(adr)"
+
+    # 美股代码内含点号（brk.b.n -> brk.b）
+    raw = "v_hint=\"us~brk.b.n~\\u4f2f\\u514b\\u5e0c\\u5c14~bkxe~GP\""
+    results = parse_smartbox(raw)
+    assert results[0]["symbol"] == "usbrk.b"

@@ -1,9 +1,10 @@
-"""新浪 沪深京 A股 + 港股行情源（价格、涨跌幅、五档盘口）。
+"""新浪 沪深京 A股 + 港股 + 美股行情源（价格、涨跌幅、盘口）。
 
-接口: GET https://hq.sinajs.cn/list=sh600519,sz000001,sh000001 / rt_hk00700
+接口: GET https://hq.sinajs.cn/list=sh600519,sz000001,sh000001 / rt_hk00700 / gb_aapl
 需要 Referer: https://finance.sina.com.cn，GBK 编码。
 代码规则: A股 sh/sz/bj + 6 位数字（sh000xxx / sz399xxx 为指数，单位: 点）；
-港股 hk + 5 位数字（如 hk00700 腾讯，走 rt_hk 前缀，单位: 港元）。
+港股 hk + 5 位数字（如 hk00700 腾讯，走 rt_hk 前缀，单位: 港元）；
+美股 us + ticker（如 usaapl，走 gb_ 前缀，单位: 美元）。
 
 A股字段布局（2026-10 实测验证，见 AGENTS.md）:
   [0]名称 [1]今开 [2]昨收 [3]最新价 [4]最高 [5]最低 [6]买一价 [7]卖一价
@@ -13,6 +14,12 @@ A股字段布局（2026-10 实测验证，见 AGENTS.md）:
   [0]英文名 [1]中文名 [2]今开 [3]昨收 [4]最高 [5]最低 [6]最新价
   [7]跌额 [8]涨跌幅% [9]买一价 [10]卖一价 [11]成交额(港元) [12]成交量(股)
   [13]市盈率 [15]52周最高 [16]52周最低 [17]日期(YYYY/MM/DD) [18]时间
+
+美股 gb_ 字段布局（2026-10 实测验证，样本 AAPL/MSFT/TSLA，与腾讯行情 qt.gtimg.cn 交叉对照）:
+  [0]名称 [1]最新价 [2]涨跌幅% [3]行情时间(北京时间) [4]涨跌额 [5]今开
+  [6]最高 [7]最低 [8]52周最高 [9]52周最低 [10]成交量(股) [12]市值
+  [22]盘后价 [25]盘后时间 [26]收盘时间(美东)
+  无买卖盘；昨收 = 最新价 - 涨跌额（无独立字段）
 """
 
 from __future__ import annotations
@@ -32,12 +39,15 @@ _HEADERS = {
 _SYMBOL_RE = re.compile(r"^(sh|sz|bj)\d{6}$")
 _INDEX_RE = re.compile(r"^(sh000|sz399)\d{3}$")
 _HK_RE = re.compile(r"^hk\d{5}$")
+_US_RE = re.compile(r"^us[a-z][a-z0-9.\-]{0,9}$")
+# smartbox 美股代码带交易所后缀（aapl.oq / brk.b.n / tcehy.ps），hq 请求用纯 ticker
+_US_EXCH_SUFFIX = (".oq", ".n", ".am", ".ps", ".ob", ".pk")
 
 
 @register
 class SinaStockSource(SourceAdapter):
     name = "sina_stock"
-    description = "新浪 股票行情（沪深京 A股/指数 + 港股：最新价、涨跌幅、盘口）"
+    description = "新浪 股票行情（沪深京 A股/指数 + 港股 + 美股：最新价、涨跌幅、盘口）"
     homepage = "https://finance.sina.com.cn"
     known_symbols: ClassVar[dict[str, str]] = {
         "sh000001": "上证指数",
@@ -49,15 +59,20 @@ class SinaStockSource(SourceAdapter):
         "sh600036": "招商银行",
         "hk00700": "腾讯控股",
         "hk01810": "小米集团",
+        "usaapl": "苹果",
+        "usmsft": "微软",
     }
 
     async def fetch(self, symbol: str, extra: dict[str, Any] | None = None) -> Quote:
         symbol = symbol.strip().lower()
         if _HK_RE.match(symbol):
             return await self._fetch_hk(symbol)
+        if _US_RE.match(symbol):
+            return await self._fetch_us(symbol)
         if not _SYMBOL_RE.match(symbol):
             raise SourceError(
-                f"invalid stock symbol: {symbol!r} (A股: sh/sz/bj + 6 digits; 港股: hk + 5 digits)"
+                f"invalid stock symbol: {symbol!r} "
+                "(A股: sh/sz/bj + 6 digits; 港股: hk + 5 digits; 美股: us + ticker)"
             )
         return await self._fetch_a(symbol)
 
@@ -142,6 +157,45 @@ class SinaStockSource(SourceAdapter):
             time=f"{raw_date} {fields[18]}" if fields[18] else raw_date,
             unit="港元",
             extra={"change_pct": self._change_pct(last, prev_close)},
+        )
+
+    @staticmethod
+    def _us_ticker(symbol: str) -> str:
+        """去掉 smartbox 交易所后缀（brk.b.n -> brk.b）。"""
+        ticker = symbol[2:]
+        for suffix in _US_EXCH_SUFFIX:
+            if ticker.endswith(suffix):
+                return ticker[: -len(suffix)]
+        return ticker
+
+    async def _fetch_us(self, symbol: str) -> Quote:
+        """美股（gb_ 前缀），字段布局见模块 docstring。"""
+        ticker = self._us_ticker(symbol)
+        fields = await self._fetch_raw(f"gb_{ticker}", symbol)
+        if len(fields) < 11:
+            raise SourceError(f"sina_stock no usable price for {symbol}")
+
+        last = parse_float(fields[1])
+        if last is None or last <= 0:
+            raise SourceError(f"sina_stock no usable price for {symbol}")
+        change = parse_float(fields[4])
+        prev_close = last - change if change is not None else None
+
+        return Quote(
+            symbol=symbol,
+            name=fields[0],
+            last=last,
+            bid=None,  # 美股无买卖盘
+            ask=None,
+            open=parse_float(fields[5]),
+            high=parse_float(fields[6]),
+            low=parse_float(fields[7]),
+            prev_close=prev_close if prev_close and prev_close > 0 else None,
+            volume=parse_float(fields[10]),
+            turnover=None,  # gb_ 无成交额字段（[12] 是市值）
+            time=fields[3],
+            unit="美元",
+            extra={"change_pct": parse_float(fields[2])},
         )
 
     @staticmethod

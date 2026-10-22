@@ -11,7 +11,9 @@
 字段: market~code~name~pinyin~type；常见 type: GP-A(A股) GP(港股/美股)
 ZS(指数) QZ(权证) jj/KJ(基金)。空结果返回 ``v_hint="N"``。
 
-只保留 sina_stock 源可消费的候选: 沪深京 A股/指数 + 港股正股。
+只保留 sina_stock 源可消费的候选: 沪深京 A股/指数 + 港股正股 + 美股正股。
+美股 code 带交易所后缀（aapl.oq / brk.b.n），去掉后缀即 gb_ 请求的纯 ticker；
+名称含 "etf"（不区分大小写）的美股条目过滤（smartbox 会返回大量杠杆/期权 ETF）。
 """
 
 from __future__ import annotations
@@ -25,6 +27,8 @@ _HEADERS = {
 }
 _ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
 _MAX_RESULTS = 15
+# smartbox 美股代码的交易所后缀（brk.b.n -> brk.b）
+_US_EXCH_SUFFIX = (".oq", ".n", ".am", ".ps", ".ob", ".pk")
 
 
 def _decode_escapes(text: str) -> str:
@@ -60,8 +64,18 @@ def parse_smartbox(text: str) -> list[dict]:
             kind = "stock"
             if kind_raw != "GP" or not code.isdigit() or len(code) != 5:
                 continue  # 港股只要 5 位数字正股（排除权证 QZ/指数等）
+        elif market == "us":
+            kind = "stock"
+            if kind_raw != "GP" or "etf" in name.lower():
+                continue  # 美股只要正股，过滤杠杆/期权 ETF（smartbox 无类型区分）
+            for suffix in _US_EXCH_SUFFIX:
+                if code.endswith(suffix):
+                    code = code[: -len(suffix)]
+                    break
+            if not code:
+                continue
         else:
-            continue  # us 等暂无源支持
+            continue  # 其余市场暂无源支持
 
         symbol = f"{market}{code}"
         if symbol in seen:

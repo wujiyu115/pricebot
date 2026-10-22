@@ -7,6 +7,7 @@ from datetime import datetime
 from app.core.monitor.trading_hours import (
     is_hk_stock_trading_time,
     is_sge_trading_time,
+    is_us_stock_trading_time,
     should_poll,
 )
 
@@ -143,3 +144,26 @@ class TestHkStockHours:
         assert is_hk_stock_trading_time(dt(0, "12:01")) is False
         assert is_hk_stock_trading_time(dt(0, "16:01")) is False
         assert is_hk_stock_trading_time(dt(5, "10:00")) is False  # 周六
+
+
+class TestUsStockHours:
+    """美股（北京时间并集窗口 21:30-次日05:00，凌晨段周二~周六）。"""
+
+    def test_evening_sessions(self):
+        assert is_us_stock_trading_time(dt(0, "21:30")) is True  # 周一晚盘开始
+        assert is_us_stock_trading_time(dt(0, "21:29")) is False
+        assert is_us_stock_trading_time(dt(2, "23:59")) is True
+        assert is_us_stock_trading_time(dt(4, "23:00")) is True  # 周五晚盘
+        assert is_us_stock_trading_time(dt(5, "22:00")) is False  # 周六晚（=美东周六）
+
+    def test_morning_sessions(self):
+        assert is_us_stock_trading_time(dt(2, "04:00")) is True  # 周二凌晨（=美东周一晚盘）
+        assert is_us_stock_trading_time(dt(5, "05:00")) is True  # 周六凌晨（=美东周五收盘）
+        assert is_us_stock_trading_time(dt(5, "05:01")) is False
+        assert is_us_stock_trading_time(dt(0, "04:00")) is False  # 周一凌晨（=美东周日晚）
+        assert is_us_stock_trading_time(dt(6, "02:00")) is False  # 周日凌晨
+
+    def test_should_poll(self):
+        assert should_poll("us_stock", dt(0, "22:00")) is True
+        assert should_poll("us_stock", dt(0, "12:00")) is False
+        assert should_poll("us_stock", dt(6, "22:00")) is False

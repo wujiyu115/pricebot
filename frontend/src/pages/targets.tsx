@@ -41,7 +41,7 @@ function TargetDialog({
     const [name, setName] = useState("")
     const [source, setSource] = useState("")
     const [symbol, setSymbol] = useState("")
-    const [schedule, setSchedule] = useState<"always" | "sge" | "cn_stock" | "hk_stock" | "cn_futures">("always")
+    const [schedule, setSchedule] = useState<"always" | "sge" | "cn_stock" | "hk_stock" | "us_stock" | "cn_futures">("always")
     // 股票名称联想搜索（仅 sina_stock 源展示）
     const [searchQ, setSearchQ] = useState("")
     const [debouncedQ, setDebouncedQ] = useState("")
@@ -87,6 +87,7 @@ function TargetDialog({
     })
 
     function marketLabel(market: string, kind: string): string {
+        if (market === "us") return "美股"
         if (market === "hk") return "港股"
         if (kind === "index") return "指数"
         return "A股"
@@ -346,7 +347,7 @@ function TargetDialog({
                         <Select
                             value={schedule}
                             onValueChange={(v) =>
-                                setSchedule(v as "always" | "sge" | "cn_stock" | "hk_stock" | "cn_futures")
+                                setSchedule(v as "always" | "sge" | "cn_stock" | "hk_stock" | "us_stock" | "cn_futures")
                             }
                         >
                             <SelectTrigger>
@@ -357,6 +358,7 @@ function TargetDialog({
                                 <SelectItem value="sge">仅上金所交易时段</SelectItem>
                                 <SelectItem value="cn_stock">仅A股交易时段</SelectItem>
                                 <SelectItem value="hk_stock">仅港股交易时段</SelectItem>
+                                <SelectItem value="us_stock">仅美股交易时段</SelectItem>
                                 <SelectItem value="cn_futures">仅国内期货交易时段</SelectItem>
                             </SelectContent>
                         </Select>
