@@ -70,6 +70,10 @@ export const api = {
             "/targets/verify",
             { method: "POST", body: JSON.stringify(data) },
         ),
+    searchTargets: (q: string) =>
+        request<{ results: Array<{ source: string; symbol: string; name: string; market: string; kind: string }> }>(
+            `/targets/search?q=${encodeURIComponent(q)}`,
+        ).then((r) => r.results),
     refreshTarget: (id: string) =>
         request<{ ok: boolean; quote: object | null; last_error: string | null }>(
             `/targets/${id}/refresh`,

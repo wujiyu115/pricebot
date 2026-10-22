@@ -29,6 +29,14 @@ def _payload(symbol: str, fields: str) -> bytes:
     return f'var hq_str_{symbol}="{fields}";\n'.encode("gbk")
 
 
+# 2026-10-21 实测样本（腾讯控股 rt_hk00700）
+_TENCENT_HK = (
+    "TENCENT,腾讯控股,412.000,410.400,413.400,393.800,393.800,-16.600,-4.045,"
+    "393.600,393.800,15135231021.300,37783835,14.306,0.000,656.353,393.800,"
+    "2026/10/21,16:08:20,100|0,N|Y|Y,395.000|375.400|414.600,0|||0.000|0.000|0.000, |0,Y"
+)
+
+
 @pytest.fixture
 def mock_transport(monkeypatch):
     def install(handler) -> None:
@@ -79,10 +87,31 @@ class TestSinaStockParse:
         assert quote.bid is None
         assert quote.ask is None
 
+    async def test_hk_stock_fields(self, mock_transport):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert "rt_hk00700" in str(request.url)
+            return httpx.Response(200, content=_payload("rt_hk00700", _TENCENT_HK))
+
+        mock_transport(handler)
+        quote = await SinaStockSource().fetch("HK00700")  # 大小写归一
+        assert quote.name == "腾讯控股"
+        assert quote.last == 393.800
+        assert quote.prev_close == 410.400
+        assert quote.open == 412.000
+        assert quote.high == 413.400
+        assert quote.low == 393.800
+        assert quote.bid == 393.600
+        assert quote.ask == 393.800
+        assert quote.volume == 37783835  # 股
+        assert quote.turnover == 15135231021.3  # 港元
+        assert quote.time == "2026-10-21 16:08:20"
+        assert quote.unit == "港元"
+        assert quote.extra["change_pct"] == pytest.approx(-4.045, abs=0.01)
+
     async def test_invalid_symbol_rejected(self):
-        with pytest.raises(SourceError, match="invalid A-share symbol"):
+        with pytest.raises(SourceError, match="invalid stock symbol"):
             await SinaStockSource().fetch("AAPL")
-        with pytest.raises(SourceError, match="invalid A-share symbol"):
+        with pytest.raises(SourceError, match="invalid stock symbol"):
             await SinaStockSource().fetch("sh60051")
 
     async def test_empty_payload_raises(self, mock_transport):

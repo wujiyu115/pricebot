@@ -27,6 +27,11 @@ _CN_FUTURES_DAY = (
     (dtime(9, 0), dtime(11, 30)),
     (dtime(13, 30), dtime(15, 0)),
 )
+# 港股: 9:30-12:00, 13:00-16:00（含开盘前竞价时段已并入连续时段，节假日休市由空报价体现）
+_HK_STOCK_SESSIONS = (
+    (dtime(9, 30), dtime(12, 0)),
+    (dtime(13, 0), dtime(16, 0)),
+)
 
 
 def is_sge_trading_time(dt: datetime) -> bool:
@@ -73,18 +78,28 @@ def is_cn_futures_trading_time(dt: datetime) -> bool:
     return 0 < weekday <= 5 and t <= _NIGHT_END
 
 
+def is_hk_stock_trading_time(dt: datetime) -> bool:
+    """港股交易时段: 周一~周五 9:30-12:00, 13:00-16:00（港节假日休市无法识别，报价静止无副作用）。"""
+    if dt.weekday() >= 5:
+        return False
+    t = dt.time()
+    return any(start <= t <= end for start, end in _HK_STOCK_SESSIONS)
+
+
 def now_is_sge_trading_time() -> bool:
     return is_sge_trading_time(datetime.now())
 
 
 def should_poll(schedule: str | None, dt: datetime) -> bool:
-    """schedule: "always"(默认) | "sge" | "cn_stock" | "cn_futures" | None。"""
+    """schedule: "always"(默认) | "sge" | "cn_stock" | "hk_stock" | "cn_futures" | None。"""
     if not schedule or schedule == "always":
         return True
     if schedule == "sge":
         return is_sge_trading_time(dt)
     if schedule == "cn_stock":
         return is_cn_stock_trading_time(dt)
+    if schedule == "hk_stock":
+        return is_hk_stock_trading_time(dt)
     if schedule == "cn_futures":
         return is_cn_futures_trading_time(dt)
     return True
@@ -93,6 +108,7 @@ def should_poll(schedule: str | None, dt: datetime) -> bool:
 __all__ = [
     "is_cn_futures_trading_time",
     "is_cn_stock_trading_time",
+    "is_hk_stock_trading_time",
     "is_sge_trading_time",
     "now_is_sge_trading_time",
     "should_poll",

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.core.monitor.trading_hours import is_sge_trading_time, should_poll
+from app.core.monitor.trading_hours import (
+    is_hk_stock_trading_time,
+    is_sge_trading_time,
+    should_poll,
+)
 
 
 def dt(weekday: int, hhmm: str) -> datetime:
@@ -121,3 +125,21 @@ class TestShouldPoll:
         assert should_poll("cn_stock", dt(0, "10:00")) is True
         assert should_poll("cn_stock", dt(6, "10:00")) is False
         assert should_poll("cn_stock", dt(0, "12:30")) is False
+
+    def test_hk_stock_schedule(self):
+        assert should_poll("hk_stock", dt(0, "10:00")) is True
+        assert should_poll("hk_stock", dt(0, "09:20")) is False  # 早于开盘
+        assert should_poll("hk_stock", dt(0, "12:30")) is False  # 午休
+        assert should_poll("hk_stock", dt(0, "15:59")) is True
+        assert should_poll("hk_stock", dt(6, "10:00")) is False
+
+
+class TestHkStockHours:
+    def test_sessions(self):
+        assert is_hk_stock_trading_time(dt(0, "09:30")) is True
+        assert is_hk_stock_trading_time(dt(0, "12:00")) is True
+        assert is_hk_stock_trading_time(dt(0, "13:00")) is True
+        assert is_hk_stock_trading_time(dt(0, "16:00")) is True
+        assert is_hk_stock_trading_time(dt(0, "12:01")) is False
+        assert is_hk_stock_trading_time(dt(0, "16:01")) is False
+        assert is_hk_stock_trading_time(dt(5, "10:00")) is False  # 周六

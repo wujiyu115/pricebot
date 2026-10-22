@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2, Plus, RefreshCw, SearchCheck, Trash2 } from "lucide-react"
+import { Loader2, Plus, RefreshCw, Search, SearchCheck, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api } from "@/api/client"
@@ -41,7 +41,14 @@ function TargetDialog({
     const [name, setName] = useState("")
     const [source, setSource] = useState("")
     const [symbol, setSymbol] = useState("")
-    const [schedule, setSchedule] = useState<"always" | "sge" | "cn_stock" | "cn_futures">("always")
+    const [schedule, setSchedule] = useState<"always" | "sge" | "cn_stock" | "hk_stock" | "cn_futures">("always")
+    // 股票名称联想搜索（仅 sina_stock 源展示）
+    const [searchQ, setSearchQ] = useState("")
+    const [debouncedQ, setDebouncedQ] = useState("")
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedQ(searchQ.trim()), 400)
+        return () => clearTimeout(timer)
+    }, [searchQ])
     const [ghUrl, setGhUrl] = useState("")
     const [ghJsonPath, setGhJsonPath] = useState("")
     const [ghRegex, setGhRegex] = useState("")
@@ -70,6 +77,20 @@ function TargetDialog({
     }, [open, editing])
 
     const sourceMeta = sources.find((s) => s.name === source)
+
+    const { data: searchResults, isFetching: searching } = useQuery({
+        queryKey: ["stockSearch", debouncedQ],
+        queryFn: () => api.searchTargets(debouncedQ),
+        enabled: source === "sina_stock" && debouncedQ.length >= 1,
+        staleTime: 60_000,
+        retry: false,
+    })
+
+    function marketLabel(market: string, kind: string): string {
+        if (market === "hk") return "港股"
+        if (kind === "index") return "指数"
+        return "A股"
+    }
 
     // 按源组装的 extra（generic_http / manmanbuy 各一套）
     function buildExtra(): Record<string, unknown> {
@@ -160,6 +181,17 @@ function TargetDialog({
                                 {verifyMutation.isPending ? "查询中…" : "验证代码"}
                             </button>
                         </div>
+                        {source === "sina_stock" && (
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    value={searchQ}
+                                    onChange={(e) => setSearchQ(e.target.value)}
+                                    className="pl-8"
+                                    placeholder="搜名称/拼音/代码，如: 腾讯 / gzmt / 00700"
+                                />
+                            </div>
+                        )}
                         <Input
                             value={symbol}
                             onChange={(e) => {
@@ -193,6 +225,39 @@ function TargetDialog({
                                 ) : (
                                     <>✗ {verifyResult.error}</>
                                 )}
+                            </div>
+                        )}
+                        {source === "sina_stock" && debouncedQ && (
+                            <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border p-1.5">
+                                {searching && (
+                                    <div className="flex items-center gap-1.5 px-1 py-1 text-xs text-muted-foreground">
+                                        <Loader2 className="size-3 animate-spin" /> 搜索中…
+                                    </div>
+                                )}
+                                {!searching && searchResults && searchResults.length === 0 && (
+                                    <div className="px-1 py-1 text-xs text-muted-foreground">无匹配结果</div>
+                                )}
+                                {searchResults?.map((item) => (
+                                    <button
+                                        key={item.symbol}
+                                        type="button"
+                                        className="flex w-full items-center justify-between gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-accent"
+                                        onClick={() => {
+                                            setSymbol(item.symbol)
+                                            if (!name) setName(item.name)
+                                            setSearchQ("")
+                                            setVerifyResult(null)
+                                        }}
+                                    >
+                                        <span className="flex min-w-0 items-center gap-1.5">
+                                            <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">
+                                                {marketLabel(item.market, item.kind)}
+                                            </span>
+                                            <span className="truncate">{item.name}</span>
+                                        </span>
+                                        <span className="shrink-0 font-mono text-muted-foreground">{item.symbol}</span>
+                                    </button>
+                                ))}
                             </div>
                         )}
                         {sourceMeta && Object.keys(sourceMeta.known_symbols).length > 0 && (
@@ -281,7 +346,7 @@ function TargetDialog({
                         <Select
                             value={schedule}
                             onValueChange={(v) =>
-                                setSchedule(v as "always" | "sge" | "cn_stock" | "cn_futures")
+                                setSchedule(v as "always" | "sge" | "cn_stock" | "hk_stock" | "cn_futures")
                             }
                         >
                             <SelectTrigger>
@@ -291,6 +356,7 @@ function TargetDialog({
                                 <SelectItem value="always">全时段</SelectItem>
                                 <SelectItem value="sge">仅上金所交易时段</SelectItem>
                                 <SelectItem value="cn_stock">仅A股交易时段</SelectItem>
+                                <SelectItem value="hk_stock">仅港股交易时段</SelectItem>
                                 <SelectItem value="cn_futures">仅国内期货交易时段</SelectItem>
                             </SelectContent>
                         </Select>

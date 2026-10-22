@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ...core.sources import list_source_names
 from ...core.sources.base import SourceError, get_source_class
+from ...core.search import search_stocks
 from ...models.schemas import TargetIn, TargetPatch, VerifyIn
 from ..deps import get_services, not_found
 
@@ -29,6 +30,19 @@ async def get_sources(services=Depends(get_services)):
     from ...core.sources import list_sources
 
     return {"sources": list_sources()}
+
+
+@router.get("/search")
+async def search_symbol(q: str, services=Depends(get_services)):
+    """按名称/拼音/代码联想搜索股票（A股/指数/港股），返回 sina_stock 可用候选。"""
+    query = q.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="query is empty")
+    try:
+        results = await search_stocks(query, timeout=float(services.engine.timeout))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"search failed: {exc}") from exc
+    return {"results": results}
 
 
 @router.post("/verify", status_code=200)

@@ -20,7 +20,7 @@ PriceBot：国内金价（上金所 AU9999 / 黄金T+D）监控推送系统。�
 - Binance 公共镜像 `data-api.binance.vision/api/v3/ticker/24hr?symbol=BTCUSDT`：JSON 接口（非 GBK 串）；`api.binance.com` 主站及 OKX/CoinGecko 在本网络实测不可达（2026-10），镜像可达；Gate 备选 `api.gateio.ws/api/v4/spot/tickers`；CryptoCompare 已需 API key
 - 新浪国内期货 主力连续（`SC0`/`RB0`/`CU0` 等，品种+0）：**必须 `nf_` 前缀请求**（`list=nf_SC0`），不带前缀的 28 字段旧格式返回的是 2024 年静态历史数据（已踩坑）；月份合约（SC2501）此接口不支持；nf_ 布局见 `app/core/sources/sina_futures.py` 顶部注释（f8=最新价、f10=昨结=涨跌幅基准、f6/f7=买一/卖一、f13=持仓、f14=成交量）；单位按品种映射（SC=元/桶、AU=元/克、AG=元/千克、其余缺省元/吨），target.extra["unit"] 可覆盖
 - 上金所官网 `POST https://www.sge.com.cn/graph/Dailyhq`，form `instid=Au99.99`（注意 URL 编码：`Au(T+D)` 必须编码成 `Au%28T%2BD%29`，query string 里 `+` 会变空格）
-- SGE 交易时段参考 `app/core/monitor/trading_hours.py`（夜盘跨零点归属前一晚）；A股时段 `cn_stock`：9:15 集合竞价起 - 11:30 / 13:00-15:00；期货时段 `cn_futures`：日盘 9:00-11:30/13:30-15:00 + 夜盘 21:00-02:30（品种并集，周五晚有夜盘→周六凌晨算交易，周日晚无夜盘→周一凌晨不算）
+- SGE 交易时段参考 `app/core/monitor/trading_hours.py`（夜盘跨零点归属前一晚）；A股时段 `cn_stock`：9:15 集合竞价起 - 11:30 / 13:00-15:00；港股时段 `hk_stock`：9:30-12:00 / 13:00-16:00；期货时段 `cn_futures`：日盘 9:00-11:30/13:30-15:00 + 夜盘 21:00-02:30（品种并集，周五晚有夜盘→周六凌晨算交易，周日晚无夜盘→周一凌晨不算）
 
 ## 项目特有陷阱
 

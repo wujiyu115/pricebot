@@ -68,6 +68,34 @@ class TestTargetsAPI:
             t for t in client.get("/api/targets").json()["targets"] if t["id"] != target_id
         ]
 
+    def test_search_endpoint(self, client, monkeypatch):
+        """名称搜索端点：透传 search_stocks 结果；空 q 返回 422；上游异常返回 502。"""
+        import app.core.search as search_mod
+        import app.server.routers.targets as targets_mod
+
+        async def fake_search(q: str, timeout: float = 5.0):
+            assert q == "腾讯"
+            return [
+                {"source": "sina_stock", "symbol": "hk00700", "name": "腾讯控股", "market": "hk", "kind": "stock"}
+            ]
+
+        monkeypatch.setattr(targets_mod, "search_stocks", fake_search)
+        resp = client.get("/api/targets/search", params={"q": "腾讯"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["results"][0]["symbol"] == "hk00700"
+
+        assert client.get("/api/targets/search").status_code == 422
+        assert client.get("/api/targets/search", params={"q": "  "}).status_code == 422
+
+        async def boom(q: str, timeout: float = 5.0):
+            raise RuntimeError("upstream down")
+
+        monkeypatch.setattr(targets_mod, "search_stocks", boom)
+        resp = client.get("/api/targets/search", params={"q": "x"})
+        assert resp.status_code == 502
+        monkeypatch.setattr(search_mod, "search_stocks", search_mod.search_stocks)  # 还原（防御）
+
     def test_invalid_source_rejected(self, client):
         resp = client.post(
             "/api/targets",
